@@ -1,0 +1,253 @@
+<main class="page-shell">
+
+  <!-- ── Intro row ─────────────────────────────────────────────────────── -->
+  <section class="intro-row">
+    <div>
+      <p class="eyebrow">PORTAIL CLIENT <span>/</span> JORDAN LEE</p>
+      <h1>Trouvez votre prochain<br><em>départ.</em></h1>
+    </div>
+    <p class="intro-note">Voyages soigneusement sélectionnés,<br>places disponibles en direct, réservation simple.</p>
+  </section>
+
+  <!-- ── Flash notices ─────────────────────────────────────────────────── -->
+  @if (notices().length) {
+    <div class="notices" aria-live="polite">
+      @for (n of notices(); track n.message) {
+        <p class="notice {{ n.type }}">{{ n.message }}</p>
+      }
+    </div>
+  }
+
+  <!-- ── Backend unreachable banner ──────────────────────────────────────── -->
+  @if (backendUnreachable()) {
+    <section class="database-warning" role="alert">
+      <span class="warning-mark">!</span>
+      <div>
+        <h2>Connexion au backend impossible</h2>
+        <p>
+          Assurez-vous que le serveur Flask fonctionne sur
+          <code>127.0.0.1:8082</code>, que les identifiants MySQL dans
+          <code>.env</code> sont corrects et que la migration Alembic a été appliquée.
+        </p>
+        <code class="command">python web_app.py</code>
+      </div>
+    </section>
+  } @else {
+
+    <!-- ── Trip search band ─────────────────────────────────────────────── -->
+    <section class="search-band" aria-labelledby="search-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">LA COLLECTION</p>
+          <h2 id="search-title">Voyages disponibles</h2>
+        </div>
+        <span class="result-count">
+          {{ trips().length }} RÉSULTAT{{ trips().length !== 1 ? 'S' : '' }}
+        </span>
+      </div>
+
+      <form class="filter-form" (ngSubmit)="onSearch()" #searchForm="ngForm">
+        <!-- Destination dropdown (dynamic from backend) -->
+        <label class="filter-destination">Destination
+          <select
+            id="search-destination"
+            name="destination"
+            [ngModel]="selectedDestinationId()"
+            (ngModelChange)="selectedDestinationId.set($event)"
+          >
+            <option value="">Toutes les destinations</option>
+            @if (destinationsLoading()) {
+              <option disabled>Chargement…</option>
+            }
+            @for (dest of destinations(); track dest.id) {
+              <option [value]="dest.id.toString()">{{ dest.name }}, {{ dest.country }}</option>
+            }
+          </select>
+        </label>
+
+        <!-- Departure date -->
+        <label>Date de départ
+          <input
+            id="search-departure"
+            type="date"
+            name="departure_date"
+            [ngModel]="departureDate()"
+            (ngModelChange)="departureDate.set($event)"
+          >
+        </label>
+
+        <!-- Return date -->
+        <label>Date de retour
+          <input
+            id="search-return"
+            type="date"
+            name="return_date"
+            [ngModel]="returnDate()"
+            (ngModelChange)="returnDate.set($event)"
+          >
+        </label>
+
+        <!-- Traveler count -->
+        <label>Voyageurs
+          <input
+            id="search-travelers"
+            type="number"
+            name="travelers"
+            min="1"
+            max="20"
+            [ngModel]="travelers()"
+            (ngModelChange)="travelers.set(+$event)"
+          >
+        </label>
+
+        <button id="search-btn" class="search-button" type="submit">
+          Rechercher <span aria-hidden="true">→</span>
+        </button>
+      </form>
+
+      <!-- ── Trip list ──────────────────────────────────────────────────── -->
+      @if (tripsLoading()) {
+        <app-loading-spinner />
+      } @else {
+        <div class="trip-list">
+          @for (trip of trips(); track trip.id) {
+            <article class="trip-row">
+              <div class="trip-date">
+                <span>{{ monthAbbr(trip.start_date) }}</span>
+                <strong>{{ dayNum(trip.start_date) }}</strong>
+              </div>
+              <div class="trip-main">
+                <h3>{{ trip.title }}</h3>
+                <p>{{ trip.destination }}, {{ trip.country }}</p>
+              </div>
+              <div class="trip-duration">
+                <span>DATES</span>
+                {{ shortDate(trip.start_date) }} — {{ longDate(trip.end_date) }}
+                <small>({{ durationNights(trip.start_date, trip.end_date) }} nuits)</small>
+              </div>
+              <div class="trip-seats">
+                <span>PLACES</span>{{ trip.available_seats }} restante{{ trip.available_seats !== 1 ? 's' : '' }}
+              </div>
+              <div class="trip-price">
+                <span>À PARTIR DE</span>
+                <strong>{{ trip.price | currency:'EUR':'symbol':'1.2-2':'fr' }}</strong>
+              </div>
+              <button
+                id="reserve-trip-{{ trip.id }}"
+                class="book-button"
+                type="button"
+                [disabled]="trip.available_seats === 0"
+                (click)="reserve(trip)"
+              >Réserver</button>
+            </article>
+          } @empty {
+            <p class="empty-state">Aucun voyage disponible ne correspond à ces critères.</p>
+          }
+        </div>
+      }
+    </section>
+
+    <!-- ── Reservation ledger ───────────────────────────────────────────── -->
+    <section class="reservations-section" aria-labelledby="reservations-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">VOS RÉSERVATIONS</p>
+          <h2 id="reservations-title">Carnet de réservations</h2>
+        </div>
+        <span class="result-count">{{ reservations().length }} AU TOTAL</span>
+      </div>
+
+      @if (reservationsLoading()) {
+        <app-loading-spinner />
+      } @else if (reservations().length === 0) {
+        <p class="empty-state">Vos réservations apparaîtront ici.</p>
+      } @else {
+        <div class="reservation-list">
+          @for (res of reservations(); track res.id) {
+            <article class="reservation-row">
+              <div class="reservation-id">#{{ padId(res.id) }}</div>
+              <div class="reservation-main">
+                <strong>{{ res.trip_title }}</strong>
+                <span>{{ res.destination }}, {{ res.country }} · {{ shortDate(res.start_date) }} — {{ longDate(res.end_date) }}</span>
+                <span>Réservé le {{ bookingDate(res.booking_date) }} · {{ res.traveler_count }} voyageur{{ res.traveler_count !== 1 ? 's' : '' }}</span>
+              </div>
+              <span class="state state-{{ res.status.toLowerCase() }}">
+                {{ res.status === 'PENDING' ? 'EN ATTENTE' : res.status === 'CONFIRMED' ? 'CONFIRMÉ' : 'ANNULÉ' }}
+              </span>
+              <strong class="reservation-total">{{ res.total_price | currency:'EUR':'symbol':'1.2-2':'fr' }}</strong>
+
+              @if (res.status !== 'CANCELLED') {
+                @if (res.payment?.status === 'COMPLETED') {
+                  <!-- Refund button -->
+                  <button
+                    id="refund-{{ res.id }}"
+                    class="quiet-button"
+                    type="button"
+                    (click)="refund(res)"
+                  >Rembourser</button>
+                } @else if (!res.payment) {
+                  <!-- Pay panel -->
+                  <div class="payment-details">
+                    <button
+                      id="pay-toggle-{{ res.id }}"
+                      class="pay-summary"
+                      type="button"
+                      (click)="togglePaymentPanel(res.id)"
+                    >Payer</button>
+                    @if (isPanelOpen(res.id)) {
+                      <div class="payment-form">
+                        <select
+                          id="pay-method-{{ res.id }}"
+                          aria-label="Méthode de paiement"
+                          [value]="getPaymentMethod(res.id)"
+                          (change)="setPaymentMethod(res.id, $any($event.target).value)"
+                        >
+                          <option value="CREDIT_CARD">Carte bancaire</option>
+                          <option value="PAYPAL">PayPal</option>
+                          <option value="BANK_TRANSFER">Virement bancaire</option>
+                        </select>
+                        <select
+                          id="pay-outcome-{{ res.id }}"
+                          aria-label="Résultat simulé du paiement"
+                          [value]="getPaymentOutcome(res.id)"
+                          (change)="setPaymentOutcome(res.id, $any($event.target).value)"
+                        >
+                          <option value="succeed">Simuler succès</option>
+                          <option value="fail">Simuler échec</option>
+                        </select>
+                        <button
+                          id="pay-submit-{{ res.id }}"
+                          class="book-button"
+                          type="button"
+                          (click)="processPayment(res)"
+                        >Valider</button>
+                      </div>
+                    }
+                  </div>
+                  <!-- Cancel button -->
+                  <button
+                    id="cancel-{{ res.id }}"
+                    class="quiet-button"
+                    type="button"
+                    (click)="cancel(res)"
+                  >Annuler</button>
+                } @else {
+                  <!-- Payment status (PENDING/FAILED) + cancel -->
+                  <span class="payment-state">{{ res.payment!.status }}</span>
+                  <button
+                    id="cancel-{{ res.id }}"
+                    class="quiet-button"
+                    type="button"
+                    (click)="cancel(res)"
+                  >Annuler</button>
+                }
+              }
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+
+</main>
+

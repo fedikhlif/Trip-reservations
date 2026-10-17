@@ -1,0 +1,1 @@
+"""In-memory repositories for application data."""

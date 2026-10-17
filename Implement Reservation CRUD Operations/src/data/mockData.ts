@@ -1,0 +1,145 @@
+import type { Reservation, Trip } from "../types";
+
+export const trips: Trip[] = [
+  {
+    id: 1,
+    title: "Amalfi Coast Escape",
+    location: "Amalfi Coast",
+    country: "Italy",
+    category: "Coast",
+    startDate: "Sep 18, 2025",
+    duration: 7,
+    price: 2480,
+    seats: 6,
+    rating: 4.9,
+    reviews: 128,
+    image:
+      "https://images.unsplash.com/photo-1533656338503-b22f63e96cd8?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=84&w=1400",
+    description:
+      "A sun-drenched journey through cliffside villages, hidden coves, and the timeless flavors of southern Italy.",
+    highlights: ["Private coastal cruise", "Local cooking workshop", "Boutique sea-view stays"],
+  },
+  {
+    id: 2,
+    title: "Alpine Lakes & Peaks",
+    location: "Kandersteg",
+    country: "Switzerland",
+    category: "Mountains",
+    startDate: "Oct 05, 2025",
+    duration: 6,
+    price: 2890,
+    seats: 4,
+    rating: 4.8,
+    reviews: 94,
+    image:
+      "https://images.unsplash.com/photo-1527095655060-4026c4af2b25?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=84&w=1400",
+    description:
+      "Slow down among turquoise lakes, flower-filled valleys, and dramatic snow-capped summits.",
+    highlights: ["Panoramic rail journey", "Guided alpine hike", "Lakeside chalet dining"],
+  },
+  {
+    id: 3,
+    title: "Lake Brienz Stories",
+    location: "Iseltwald",
+    country: "Switzerland",
+    category: "Culture",
+    startDate: "Oct 21, 2025",
+    duration: 5,
+    price: 1950,
+    seats: 9,
+    rating: 4.7,
+    reviews: 76,
+    image:
+      "https://images.unsplash.com/photo-1528493366314-e317cd98dd52?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=84&w=1400",
+    description:
+      "Discover storybook villages and creative traditions along one of Europe's most beautiful lakes.",
+    highlights: ["Heritage village tour", "Lake steamer passage", "Artisan studio visit"],
+  },
+  {
+    id: 4,
+    title: "Mediterranean Reverie",
+    location: "Costa Brava",
+    country: "Spain",
+    category: "Coast",
+    startDate: "Nov 02, 2025",
+    duration: 8,
+    price: 2675,
+    seats: 11,
+    rating: 4.9,
+    reviews: 152,
+    image:
+      "https://images.unsplash.com/photo-1760853708334-d8da4ebe4281?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=84&w=1400",
+    description:
+      "An effortless blend of secluded shores, vibrant coastal towns, and exceptional Catalan cuisine.",
+    highlights: ["Kayak hidden coves", "Winery lunch", "Seaside design hotel"],
+  },
+  {
+    id: 5,
+    title: "Dolomites in Autumn",
+    location: "South Tyrol",
+    country: "Italy",
+    category: "Mountains",
+    startDate: "Oct 12, 2025",
+    duration: 7,
+    price: 2350,
+    seats: 3,
+    rating: 4.8,
+    reviews: 88,
+    image:
+      "https://images.unsplash.com/photo-1527668752968-14dc70a27c95?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=84&w=1400",
+    description:
+      "Golden larches, cinematic peaks, and warm mountain hospitality on a carefully paced Italian escape.",
+    highlights: ["Sunrise ridge walk", "Farm-to-table dinners", "Historic mountain inns"],
+  },
+  {
+    id: 6,
+    title: "Positano Weekend",
+    location: "Positano",
+    country: "Italy",
+    category: "Coast",
+    startDate: "Sep 27, 2025",
+    duration: 4,
+    price: 1720,
+    seats: 8,
+    rating: 4.6,
+    reviews: 63,
+    image:
+      "https://images.unsplash.com/photo-1626628193008-fa2852153d79?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=84&w=1400",
+    description:
+      "A long weekend of sea views, stylish terraces, and memorable southern Italian dining.",
+    highlights: ["Sunset boat outing", "Path of the Gods walk", "Chef's table dinner"],
+  },
+];
+
+export const initialReservations: Reservation[] = [
+  {
+    id: "RSV-2048",
+    tripId: 1,
+    customerName: "Maya Bennett",
+    guests: 2,
+    bookedOn: "Jul 14, 2025",
+    status: "Confirmed",
+    paymentStatus: "Paid",
+    total: 4960,
+  },
+  {
+    id: "RSV-2131",
+    tripId: 2,
+    customerName: "Maya Bennett",
+    guests: 1,
+    bookedOn: "Jul 22, 2025",
+    status: "Pending",
+    paymentStatus: "Pending",
+    total: 2890,
+  },
+  {
+    id: "RSV-1972",
+    tripId: 3,
+    customerName: "Maya Bennett",
+    guests: 2,
+    bookedOn: "Jun 03, 2025",
+    status: "Cancelled",
+    paymentStatus: "Refunded",
+    total: 3900,
+  },
+];

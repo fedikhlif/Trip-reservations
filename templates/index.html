@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#173a33">
+    <title>Trip Desk | Reservations</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='trip-desk.css') }}">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="wordmark" href="{{ url_for('index') }}" aria-label="Trip Desk home">
+        <span class="wordmark-icon">T</span>
+        <span>TRIP DESK<small>RESERVATIONS</small></span>
+      </a>
+      <div class="top-actions">
+        <a class="docs-link" href="/api/docs/">Swagger API</a>
+        <div class="local-status"><span class="status-dot"></span> LOCAL BOOKING</div>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="intro-row">
+        <div>
+          <p class="eyebrow">CUSTOMER PORTAL <span>/</span> JORDAN LEE</p>
+          <h1>Find your next<br><em>departure.</em></h1>
+        </div>
+        <p class="intro-note">Curated trips, live seat counts,<br>and straightforward booking.</p>
+      </section>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="notices" aria-live="polite">
+            {% for category, message in messages %}
+              <p class="notice {{ category }}">{{ message }}</p>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% if database_error %}
+        <section class="database-warning" role="alert">
+          <span class="warning-mark">!</span>
+          <div>
+            <h2>Database connection unavailable</h2>
+            <p>Check the MySQL credentials in <code>.env</code>, confirm the database exists, then apply the Alembic migration.</p>
+            <code class="command">python -m alembic upgrade head</code>
+          </div>
+        </section>
+      {% else %}
+        <section class="search-band" aria-labelledby="search-title">
+          <div class="section-heading">
+            <div><p class="eyebrow">THE COLLECTION</p><h2 id="search-title">Available journeys</h2></div>
+            <span class="result-count">{{ trips|length }} RESULT{% if trips|length != 1 %}S{% endif %}</span>
+          </div>
+          <form class="filter-form" method="get" action="{{ url_for('index') }}">
+            <label class="filter-destination">Destination
+              <input type="search" name="destination" value="{{ destination_filter }}" placeholder="City or country">
+            </label>
+            <label>Date
+              <input type="date" name="date" value="{{ date_filter }}">
+            </label>
+            <label>Maximum price
+              <input type="number" name="max_price" min="0" step="0.01" value="{{ price_filter }}" placeholder="Any price">
+            </label>
+            <button class="search-button" type="submit">Search <span aria-hidden="true">→</span></button>
+          </form>
+
+          <div class="trip-list">
+            {% for trip in trips %}
+              <article class="trip-row">
+                <div class="trip-date"><span>{{ trip.start_date.strftime('%b')|upper }}</span><strong>{{ trip.start_date.strftime('%d') }}</strong></div>
+                <div class="trip-main">
+                  <h3>{{ trip.title }}</h3>
+                  <p>{{ trip.destination.name }}, {{ trip.destination.country }}</p>
+                </div>
+                <div class="trip-duration"><span>DATES</span>{{ trip.start_date.strftime('%d %b') }} — {{ trip.end_date.strftime('%d %b %Y') }}</div>
+                <div class="trip-seats"><span>SEATS</span>{{ trip.available_seats }} left</div>
+                <div class="trip-price"><span>FROM</span><strong>${{ '%.2f'|format(trip.price) }}</strong></div>
+                <form method="post" action="{{ url_for('reserve_trip') }}">
+                  <input type="hidden" name="trip_id" value="{{ trip.id }}">
+                  <button class="book-button" type="submit">Reserve</button>
+                </form>
+              </article>
+            {% else %}
+              <p class="empty-state">No available trips match these filters.</p>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="reservations-section" aria-labelledby="reservations-title">
+          <div class="section-heading">
+            <div><p class="eyebrow">YOUR BOOKINGS</p><h2 id="reservations-title">Reservation ledger</h2></div>
+            <span class="result-count">{{ reservations|length }} TOTAL</span>
+          </div>
+          {% if reservations %}
+            <div class="reservation-list">
+              {% for reservation in reservations %}
+                <article class="reservation-row">
+                  <div class="reservation-id">#{{ '%04d'|format(reservation.id) }}</div>
+                  <div class="reservation-main"><strong>{{ reservation.trip.title }}</strong><span>{{ reservation.trip.destination.name }} · {{ reservation.booking_date.strftime('%d %b %Y') }}</span></div>
+                  <span class="state state-{{ reservation.status.name|lower }}">{{ reservation.status.name }}</span>
+                  <strong class="reservation-total">${{ '%.2f'|format(reservation.total_price) }}</strong>
+                  {% if reservation.status.name != 'CANCELLED' %}
+                    {% if reservation.payment and reservation.payment.status.name == 'COMPLETED' %}
+                      <form method="post" action="{{ url_for('refund_payment', payment_id=reservation.payment.id) }}">
+                        <button class="quiet-button" type="submit">Refund</button>
+                      </form>
+                    {% elif not reservation.payment %}
+                      <details class="payment-details">
+                        <summary>Pay</summary>
+                        <form class="payment-form" method="post" action="{{ url_for('process_payment', reservation_id=reservation.id) }}">
+                          <input type="hidden" name="amount" value="{{ '%.2f'|format(reservation.total_price) }}">
+                          <select name="method" aria-label="Payment method">
+                            <option value="CREDIT_CARD">Card</option>
+                            <option value="PAYPAL">PayPal</option>
+                            <option value="BANK_TRANSFER">Bank transfer</option>
+                          </select>
+                          <select name="outcome" aria-label="Simulated payment outcome">
+                            <option value="succeed">Simulate success</option>
+                            <option value="fail">Simulate failure</option>
+                          </select>
+                          <button class="book-button" type="submit">Process</button>
+                        </form>
+                      </details>
+                      <form method="post" action="{{ url_for('cancel_reservation', reservation_id=reservation.id) }}">
+                        <button class="quiet-button" type="submit">Cancel</button>
+                      </form>
+                    {% else %}
+                      <span class="payment-state">{{ reservation.payment.status.name }}</span>
+                      <form method="post" action="{{ url_for('cancel_reservation', reservation_id=reservation.id) }}">
+                        <button class="quiet-button" type="submit">Cancel</button>
+                      </form>
+                    {% endif %}
+                  {% endif %}
+                </article>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="empty-state">Your reservations will appear here.</p>
+          {% endif %}
+        </section>
+      {% endif %}
+      <footer><span>TRIP DESK</span><span>LOCAL DEVELOPMENT · 127.0.0.1:8082</span></footer>
+    </main>
+  </body>
+</html>

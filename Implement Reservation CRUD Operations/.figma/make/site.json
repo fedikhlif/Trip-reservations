@@ -1,0 +1,10 @@
+{
+  "description": "Manage trip reservations effortlessly with features to create, view, update, and delete bookings, ensuring a seamless experience for travelers.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
