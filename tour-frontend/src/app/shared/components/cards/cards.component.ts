@@ -10,14 +10,14 @@ import { type Trip } from '../../../core/models/trip.model';
   template: `
     <article class="destination-card-new">
       <div class="card-photo">
-        <img [src]="fallbackImage" [alt]="destination.name + ', ' + destination.country" loading="lazy" />
+        <img [src]="destination.image_url || fallbackImage" [alt]="destination.name + ', ' + destination.country" loading="lazy" />
       </div>
       <div class="card-copy">
         <small>⌖ {{ destination.name }}, {{ destination.country }}</small>
         <h3>{{ destination.name }}</h3>
         <p>{{ destination.description }}</p>
         <button type="button" (click)="book.emit()">
-          Découvrir les voyages
+          Explore trips
           <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
         </button>
       </div>
@@ -39,9 +39,9 @@ export class DestinationCardComponent {
       <div class="card-photo">
         <img [src]="image" [alt]="trip.title" loading="lazy" />
         <span [style.background]="trip.available_seats < travelers ? '#dc2626' : '#0891b2'">
-          {{ trip.available_seats === 0 ? 'Complet' : (trip.available_seats + ' place' + (trip.available_seats > 1 ? 's' : '') + ' disponible' + (trip.available_seats > 1 ? 's' : '')) }}
+          {{ trip.available_seats === 0 ? 'Sold out' : (trip.available_seats + ' seat' + (trip.available_seats > 1 ? 's' : '') + ' available') }}
         </span>
-        <small *ngIf="durationDays > 0">{{ durationDays }} jours</small>
+        <small *ngIf="durationDays > 0">{{ durationDays }} days</small>
       </div>
       <div class="card-copy">
         <div class="tour-kicker">
@@ -51,16 +51,16 @@ export class DestinationCardComponent {
         <h3>{{ trip.title }}</h3>
         <p>{{ formatDate(trip.start_date) }} – {{ formatDate(trip.end_date) }}</p>
         <div>
-          <strong>{{ formatPrice(trip.price) }} / personne</strong>
-          <span>{{ trip.available_seats }} place{{ trip.available_seats > 1 ? 's' : '' }} restante{{ trip.available_seats > 1 ? 's' : '' }}</span>
+          <strong>{{ formatPrice(trip.price) }} / person</strong>
+          <span>{{ trip.available_seats }} seat{{ trip.available_seats > 1 ? 's' : '' }} left</span>
         </div>
         <button
           type="button"
           [disabled]="trip.available_seats < travelers"
           (click)="book.emit(trip)"
-          [attr.aria-label]="'Choisir le voyage ' + trip.title"
+          [attr.aria-label]="'Choose trip ' + trip.title"
         >
-          {{ trip.available_seats < travelers ? 'Places insuffisantes' : 'Choisir ce voyage' }}
+          {{ trip.available_seats < travelers ? 'Not enough seats' : 'Choose this trip' }}
           <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
         </button>
       </div>
@@ -94,14 +94,16 @@ export class TripCardComponent {
   }
 
   formatPrice(amount: string): string {
-    return new Intl.NumberFormat('fr-FR', {
+    return new Intl.NumberFormat('en-IE', {
+      style: 'currency',
+      currency: 'EUR',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(Number(amount)) + ' €';
+    }).format(Number(amount));
   }
 
   formatDate(value: string): string {
-    return new Intl.DateTimeFormat('fr-FR', {
+    return new Intl.DateTimeFormat('en-GB', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',

@@ -84,6 +84,29 @@ class TripService:
         self.trip_repository.add(trip)
         return trip
 
+    def create_trip(
+        self,
+        admin: Admin,
+        title: str,
+        start_date: date,
+        end_date: date,
+        price: Decimal,
+        available_seats: int,
+        destination: Destination,
+    ) -> Trip:
+        """Create a trip with a database-assigned ID, requiring an Admin caller."""
+        self._require_admin(admin)
+        trip = Trip(
+            0,
+            title,
+            start_date,
+            end_date,
+            Decimal(str(price)),
+            available_seats,
+            destination,
+        )
+        return self.trip_repository.add_with_auto_id(trip)
+
     def update_trip(self, admin: Admin, trip_id: int, **changes: object) -> Trip:
         """Update an existing trip, requiring an Admin caller."""
         self._require_admin(admin)

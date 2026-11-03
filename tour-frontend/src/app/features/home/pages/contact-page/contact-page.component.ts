@@ -12,23 +12,23 @@ import { PageHeaderComponent } from '../../../../shared/components/site-parts/si
     <main class="contact-page">
       <div class="contact-layout">
         <div class="contact-info">
-          <p>Parlons de votre voyage</p>
-          <h2>Notre équipe est à votre écoute</h2>
+          <p>Let's talk about your trip</p>
+          <h2>Our team is here to help</h2>
           <span>
-            Besoin d'un conseil ou d'un itinéraire personnalisé ? Écrivez-nous,
-            nous vous répondrons dans les meilleurs délais.
+            Need advice or a customised itinerary? Get in touch and
+            we'll get back to you as soon as possible.
           </span>
           <div>
             <article>
-              <small>Téléphone</small>
+              <small>Phone</small>
               <strong>+216 71 000 000</strong>
             </article>
             <article>
-              <small>E-mail</small>
+              <small>Email</small>
               <strong>bonjour&#64;tour.tn</strong>
             </article>
             <article>
-              <small>Adresse</small>
+              <small>Address</small>
               <strong>Les Berges du Lac, Tunis</strong>
             </article>
           </div>
@@ -36,23 +36,23 @@ import { PageHeaderComponent } from '../../../../shared/components/site-parts/si
 
         <form class="contact-form-new" (ngSubmit)="onSubmit()">
           <label>
-            Nom complet
-            <input required [(ngModel)]="form.name" name="name" placeholder="Votre nom" />
+            Full name
+            <input required [(ngModel)]="form.name" name="name" placeholder="Your name" />
           </label>
           <label>
-            Adresse e-mail
-            <input type="email" required [(ngModel)]="form.email" name="email" placeholder="vous@exemple.com" />
+            Email address
+            <input type="email" required [(ngModel)]="form.email" name="email" placeholder="you@example.com" />
           </label>
           <label class="wide">
-            Sujet
-            <input required [(ngModel)]="form.subject" name="subject" placeholder="Comment pouvons-nous vous aider ?" />
+            Subject
+            <input required [(ngModel)]="form.subject" name="subject" placeholder="How can we help?" />
           </label>
           <label class="wide">
             Message
-            <textarea required [(ngModel)]="form.message" name="message" placeholder="Parlez-nous de votre projet de voyage…"></textarea>
+            <textarea required [(ngModel)]="form.message" name="message" placeholder="Tell us about your travel plans…"></textarea>
           </label>
           <button type="submit">
-            Envoyer le message
+            Send message
             <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
           </button>
           <p *ngIf="submissionNotice" class="api-error" role="alert">{{ submissionNotice }}</p>
@@ -67,6 +67,6 @@ export class ContactPageComponent {
 
   onSubmit(): void {
     this.submissionNotice =
-      "Le message n'a pas été envoyé : le backend ne propose pas encore de service de contact.";
+      'Your message was not sent: the backend does not yet provide a contact service.';
   }
 }

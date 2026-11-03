@@ -3,15 +3,22 @@
 from datetime import date
 from decimal import Decimal, InvalidOperation
 import logging
+import os
+import uuid
+from pathlib import Path
+from werkzeug.utils import secure_filename
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session, send_from_directory, current_app
 from sqlalchemy.exc import SQLAlchemyError
 
+from auth_api import SESSION_ADMIN_ID_KEY, SESSION_CUSTOMER_ID_KEY
+from domain.admin import Admin
 from domain.destination import Destination
 from domain.enums import PaymentMethod
 from domain.payment import Payment
 from domain.reservation import Reservation
 from domain.trip import Trip
+from models import DestinationModel
 from services.reservation_service import ReservationConflictError
 
 logger = logging.getLogger(__name__)
@@ -20,17 +27,59 @@ OPENAPI_SPEC = {
     "openapi": "3.0.3",
     "info": {
         "title": "Trip Reservation API",
-        "version": "1.0.0",
-        "description": "Local demo API. Uses the seeded customer Jordan Lee.",
+        "version": "2.0.0",
+        "description": "TOUR API — session-authenticated endpoints.",
     },
     "servers": [{"url": "http://127.0.0.1:8082"}],
     "tags": [
+        {"name": "Auth"},
         {"name": "Trips"},
         {"name": "Destinations"},
         {"name": "Reservations"},
         {"name": "Payments"},
+        {"name": "Admin"},
     ],
     "paths": {
+        "/api/auth/register": {
+            "post": {
+                "tags": ["Auth"],
+                "summary": "Register a new customer account",
+                "requestBody": {"required": True, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RegisterRequest"}}}},
+                "responses": {
+                    "201": {"description": "Account created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CustomerProfile"}}}},
+                    "400": {"$ref": "#/components/responses/BadRequest"},
+                    "409": {"description": "Email already in use"},
+                },
+            }
+        },
+        "/api/auth/login": {
+            "post": {
+                "tags": ["Auth"],
+                "summary": "Authenticate with email and password",
+                "requestBody": {"required": True, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LoginRequest"}}}},
+                "responses": {
+                    "200": {"description": "Authenticated", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CustomerProfile"}}}},
+                    "401": {"description": "Invalid credentials"},
+                },
+            }
+        },
+        "/api/auth/me": {
+            "get": {
+                "tags": ["Auth"],
+                "summary": "Return the authenticated customer profile",
+                "responses": {
+                    "200": {"description": "Profile", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CustomerProfile"}}}},
+                    "401": {"description": "Not authenticated"},
+                },
+            }
+        },
+        "/api/auth/logout": {
+            "post": {
+                "tags": ["Auth"],
+                "summary": "End the current session",
+                "responses": {"200": {"description": "Logged out"}},
+            }
+        },
         "/api/trips": {
             "get": {
                 "tags": ["Trips"],
@@ -45,10 +94,7 @@ OPENAPI_SPEC = {
                     {"name": "max_price", "in": "query", "schema": {"type": "number", "format": "double", "minimum": 0}},
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Available trips",
-                        "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Trip"}}}},
-                    },
+                    "200": {"description": "Available trips", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Trip"}}}}},
                     "400": {"$ref": "#/components/responses/BadRequest"},
                     "503": {"$ref": "#/components/responses/DatabaseUnavailable"},
                 },
@@ -104,22 +150,69 @@ OPENAPI_SPEC = {
                 },
             }
         },
+        "/api/admin/trips": {
+            "get": {
+                "tags": ["Admin"],
+                "summary": "List all trips for an administrator",
+                "responses": {
+                    "200": {"description": "All trips", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Trip"}}}}},
+                    "403": {"description": "Administrator access required"},
+                },
+            },
+            "post": {
+                "tags": ["Admin"],
+                "summary": "Create a trip",
+                "requestBody": {"required": True, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TripWrite"}}}},
+                "responses": {
+                    "201": {"description": "Trip created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Trip"}}}},
+                    "400": {"$ref": "#/components/responses/BadRequest"},
+                    "403": {"description": "Administrator access required"},
+                },
+            },
+        },
+        "/api/admin/trips/{trip_id}": {
+            "put": {
+                "tags": ["Admin"],
+                "summary": "Update a trip",
+                "parameters": [{"$ref": "#/components/parameters/TripId"}],
+                "requestBody": {"required": True, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TripWrite"}}}},
+                "responses": {
+                    "200": {"description": "Trip updated", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Trip"}}}},
+                    "400": {"$ref": "#/components/responses/BadRequest"},
+                    "403": {"description": "Administrator access required"},
+                    "404": {"description": "Trip or destination not found"},
+                },
+            },
+            "delete": {
+                "tags": ["Admin"],
+                "summary": "Delete a trip without reservation history",
+                "parameters": [{"$ref": "#/components/parameters/TripId"}],
+                "responses": {
+                    "204": {"description": "Trip deleted"},
+                    "403": {"description": "Administrator access required"},
+                    "404": {"description": "Trip not found"},
+                    "409": {"description": "Trip has reservation history"},
+                },
+            },
+        },
         "/api/reservations": {
             "get": {
                 "tags": ["Reservations"],
-                "summary": "List demo customer reservations",
+                "summary": "List reservations for the authenticated customer",
                 "responses": {
                     "200": {"description": "Reservation history", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Reservation"}}}}},
+                    "401": {"description": "Not authenticated"},
                     "503": {"$ref": "#/components/responses/DatabaseUnavailable"},
                 },
             },
             "post": {
                 "tags": ["Reservations"],
-                "summary": "Reserve seats for the demo customer",
+                "summary": "Reserve seats for the authenticated customer",
                 "requestBody": {"required": True, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateReservation"}}}},
                 "responses": {
                     "201": {"description": "Reservation created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Reservation"}}}},
                     "400": {"$ref": "#/components/responses/BadRequest"},
+                    "401": {"description": "Not authenticated"},
                     "409": {"description": "Insufficient seats or active reservation conflict"},
                     "404": {"description": "Trip not found"},
                     "503": {"$ref": "#/components/responses/DatabaseUnavailable"},
@@ -129,11 +222,12 @@ OPENAPI_SPEC = {
         "/api/reservations/{reservation_id}/cancel": {
             "post": {
                 "tags": ["Reservations"],
-                "summary": "Cancel a reservation owned by the demo customer",
+                "summary": "Cancel a reservation owned by the authenticated customer",
                 "parameters": [{"$ref": "#/components/parameters/ReservationId"}],
                 "responses": {
                     "200": {"description": "Cancelled reservation", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Reservation"}}}},
                     "400": {"$ref": "#/components/responses/BadRequest"},
+                    "401": {"description": "Not authenticated"},
                     "403": {"description": "Reservation belongs to another customer"},
                     "404": {"description": "Reservation not found"},
                     "503": {"$ref": "#/components/responses/DatabaseUnavailable"},
@@ -149,6 +243,7 @@ OPENAPI_SPEC = {
                 "responses": {
                     "201": {"description": "Payment attempt recorded", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Payment"}}}},
                     "400": {"$ref": "#/components/responses/BadRequest"},
+                    "401": {"description": "Not authenticated"},
                     "403": {"description": "Reservation belongs to another customer"},
                     "404": {"description": "Reservation not found"},
                     "503": {"$ref": "#/components/responses/DatabaseUnavailable"},
@@ -163,6 +258,7 @@ OPENAPI_SPEC = {
                 "responses": {
                     "200": {"description": "Refunded payment", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Payment"}}}},
                     "400": {"$ref": "#/components/responses/BadRequest"},
+                    "401": {"description": "Not authenticated"},
                     "403": {"description": "Payment belongs to another customer"},
                     "404": {"description": "Payment not found"},
                     "503": {"$ref": "#/components/responses/DatabaseUnavailable"},
@@ -178,8 +274,12 @@ OPENAPI_SPEC = {
             "DestinationId": {"name": "destination_id", "in": "path", "required": True, "schema": {"type": "integer", "minimum": 1}},
         },
         "schemas": {
+            "RegisterRequest": {"type": "object", "required": ["first_name", "last_name", "email", "password", "password_confirm"], "properties": {"first_name": {"type": "string"}, "last_name": {"type": "string"}, "email": {"type": "string", "format": "email"}, "password": {"type": "string", "minLength": 8}, "password_confirm": {"type": "string"}}},
+            "LoginRequest": {"type": "object", "required": ["email", "password"], "properties": {"email": {"type": "string", "format": "email"}, "password": {"type": "string"}}},
+            "CustomerProfile": {"type": "object", "properties": {"id": {"type": "integer"}, "name": {"type": "string"}, "first_name": {"type": "string"}, "last_name": {"type": "string"}, "email": {"type": "string"}, "role": {"type": "string", "enum": ["customer", "admin"]}}},
             "Destination": {"type": "object", "properties": {"id": {"type": "integer"}, "name": {"type": "string"}, "country": {"type": "string"}, "description": {"type": "string"}}},
             "Trip": {"type": "object", "properties": {"id": {"type": "integer"}, "destination_id": {"type": "integer"}, "title": {"type": "string"}, "destination": {"type": "string"}, "country": {"type": "string"}, "start_date": {"type": "string", "format": "date"}, "end_date": {"type": "string", "format": "date"}, "price": {"type": "string", "example": "1299.00"}, "available_seats": {"type": "integer"}}},
+            "TripWrite": {"type": "object", "required": ["title", "destination_id", "start_date", "end_date", "price", "available_seats"], "properties": {"title": {"type": "string", "maxLength": 200}, "destination_id": {"type": "integer", "minimum": 1}, "start_date": {"type": "string", "format": "date"}, "end_date": {"type": "string", "format": "date"}, "price": {"type": "number", "minimum": 0}, "available_seats": {"type": "integer", "minimum": 0}}},
             "Reservation": {"type": "object", "properties": {"id": {"type": "integer"}, "customer_id": {"type": "integer"}, "trip_id": {"type": "integer"}, "trip_title": {"type": "string"}, "destination": {"type": "string"}, "country": {"type": "string"}, "start_date": {"type": "string", "format": "date"}, "end_date": {"type": "string", "format": "date"}, "traveler_count": {"type": "integer"}, "status": {"type": "string", "enum": ["PENDING", "CONFIRMED", "CANCELLED"]}, "booking_date": {"type": "string", "format": "date-time"}, "total_price": {"type": "string"}, "payment": {"allOf": [{"$ref": "#/components/schemas/Payment"}], "nullable": True}}},
             "Payment": {"type": "object", "properties": {"id": {"type": "integer"}, "reservation_id": {"type": "integer"}, "amount": {"type": "string"}, "method": {"type": "string", "enum": ["CREDIT_CARD", "PAYPAL", "BANK_TRANSFER"]}, "status": {"type": "string", "enum": ["PENDING", "COMPLETED", "FAILED", "REFUNDED"]}}},
             "CreateReservation": {"type": "object", "required": ["trip_id"], "properties": {"trip_id": {"type": "integer", "minimum": 1}, "travelers": {"type": "integer", "minimum": 1, "default": 1}}},
@@ -194,7 +294,7 @@ OPENAPI_SPEC = {
 }
 
 
-def create_api_blueprint(get_services) -> Blueprint:
+def create_api_blueprint(get_services, get_auth_service=None) -> Blueprint:
     """Build API routes using a callback that supplies the existing services."""
     api = Blueprint("trip_api", __name__, url_prefix="/api")
 
@@ -272,6 +372,125 @@ def create_api_blueprint(get_services) -> Blueprint:
                 "Database unavailable; check configuration and migrations.", 503
             )
 
+    @api.post("/destinations")
+    def create_destination():
+        admin = _require_admin(get_services)
+        if admin is None:
+            return error_response("Administrator access required.", 403)
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return error_response("Request body must be a JSON object.", 400)
+        try:
+            values = _destination_values(body)
+            destination = get_services()[5].add_with_auto_id(
+                Destination(0, **values)
+            )
+            return jsonify(destination_json(destination)), 201
+        except ValueError as error:
+            return error_response(str(error), 400)
+        except SQLAlchemyError:
+            logger.exception("Admin destination creation failed")
+            return error_response(
+                "Database unavailable; check configuration and migrations.", 503
+            )
+
+    @api.put("/destinations/<int:destination_id>")
+    def update_destination(destination_id: int):
+        admin = _require_admin(get_services)
+        if admin is None:
+            return error_response("Administrator access required.", 403)
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return error_response("Request body must be a JSON object.", 400)
+        try:
+            values = _destination_values(body)
+            repo = get_services()[5]
+            destination = Destination(destination_id, **values)
+            repo.update(destination)
+            return jsonify(destination_json(destination))
+        except KeyError:
+            return error_response("Destination not found.", 404)
+        except ValueError as error:
+            return error_response(str(error), 400)
+        except SQLAlchemyError:
+            logger.exception("Admin destination update failed")
+            return error_response(
+                "Database unavailable; check configuration and migrations.", 503
+            )
+
+    @api.delete("/destinations/<int:destination_id>")
+    def delete_destination(destination_id: int):
+        admin = _require_admin(get_services)
+        if admin is None:
+            return error_response("Administrator access required.", 403)
+        try:
+            get_services()[5].delete(destination_id)
+            return "", 204
+        except KeyError:
+            return error_response("Destination not found.", 404)
+        except SQLAlchemyError:
+            logger.exception("Admin destination deletion failed")
+            return error_response(
+                "Database unavailable; check configuration and migrations.", 503
+            )
+
+    @api.post("/destinations/<int:destination_id>/image")
+    def upload_destination_image(destination_id: int):
+        """Accept a multipart image upload and persist the URL on the destination."""
+        admin = _require_admin(get_services)
+        if admin is None:
+            return error_response("Administrator access required.", 403)
+        if "image" not in request.files:
+            return error_response("No image file in request.", 400)
+        file = request.files["image"]
+        if not file.filename:
+            return error_response("File has no name.", 400)
+        ext = Path(secure_filename(file.filename)).suffix.lower()
+        if ext not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+            return error_response("Unsupported image type. Use JPG, PNG, WebP or GIF.", 400)
+        uploads_dir = Path(
+            current_app.config.get(
+                "DESTINATION_UPLOAD_FOLDER",
+                Path(current_app.root_path) / "static" / "uploads" / "destinations",
+            )
+        )
+        try:
+            uploads_dir.mkdir(parents=True, exist_ok=True)
+            filename = f"{uuid.uuid4().hex}{ext}"
+            file.save(uploads_dir / filename)
+        except OSError:
+            logger.exception("Destination image could not be saved")
+            return error_response("The destination image could not be saved.", 500)
+
+        image_url = f"/api/uploads/destinations/{filename}"
+        try:
+            repo = get_services()[5]
+            # Update image_url directly — no need to pre-fetch the destination first
+            with repo.database.session_scope() as session:
+                model = session.get(DestinationModel, destination_id)
+                if model is None:
+                    logger.error("Destination id %s not found during image upload", destination_id)
+                    return error_response("Destination not found.", 404)
+                model.image_url = image_url
+            return jsonify({"image_url": image_url}), 200
+        except KeyError:
+            logger.error("Destination id %s not found during image upload", destination_id)
+            return error_response("Destination not found.", 404)
+        except SQLAlchemyError:
+            logger.exception("Image URL persistence failed")
+            return error_response("Database unavailable.", 503)
+
+    @api.get("/uploads/destinations/<path:filename>")
+    def serve_destination_image(filename: str):
+        """Serve uploaded destination images."""
+        uploads_dir = Path(
+            current_app.config.get(
+                "DESTINATION_UPLOAD_FOLDER",
+                Path(current_app.root_path) / "static" / "uploads" / "destinations",
+            )
+        )
+        return send_from_directory(uploads_dir, filename)
+
     @api.get("/trips/<int:trip_id>")
     def get_trip(trip_id: int):
         try:
@@ -285,11 +504,84 @@ def create_api_blueprint(get_services) -> Blueprint:
                 "Database unavailable; check configuration and migrations.", 503
             )
 
+    @api.get("/admin/trips")
+    def list_admin_trips():
+        admin = _require_admin(get_services)
+        if admin is None:
+            return error_response("Administrator access required.", 403)
+        try:
+            trips = get_services()[2].list_all_trips()
+            return jsonify([trip_json(trip) for trip in trips])
+        except SQLAlchemyError:
+            logger.exception("Admin trip listing failed")
+            return error_response("Database unavailable; check configuration and migrations.", 503)
+
+    @api.post("/admin/trips")
+    def create_admin_trip():
+        admin = _require_admin(get_services)
+        if admin is None:
+            return error_response("Administrator access required.", 403)
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return error_response("Request body must be a JSON object.", 400)
+        try:
+            values = _admin_trip_values(body, get_services()[5])
+            trip = get_services()[2].create_trip(admin, **values)
+            return jsonify(trip_json(trip)), 201
+        except KeyError:
+            return error_response("Destination not found.", 404)
+        except (ValueError, InvalidOperation) as error:
+            return error_response(str(error), 400)
+        except SQLAlchemyError:
+            logger.exception("Admin trip creation failed")
+            return error_response("Database unavailable; check configuration and migrations.", 503)
+
+    @api.put("/admin/trips/<int:trip_id>")
+    def update_admin_trip(trip_id: int):
+        admin = _require_admin(get_services)
+        if admin is None:
+            return error_response("Administrator access required.", 403)
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return error_response("Request body must be a JSON object.", 400)
+        try:
+            values = _admin_trip_values(body, get_services()[5])
+            trip = get_services()[2].update_trip(admin, trip_id, **values)
+            return jsonify(trip_json(trip))
+        except KeyError as error:
+            if "Destination" in str(error):
+                return error_response("Destination not found.", 404)
+            return error_response("Trip not found.", 404)
+        except (ValueError, InvalidOperation) as error:
+            return error_response(str(error), 400)
+        except SQLAlchemyError:
+            logger.exception("Admin trip update failed")
+            return error_response("Database unavailable; check configuration and migrations.", 503)
+
+    @api.delete("/admin/trips/<int:trip_id>")
+    def delete_admin_trip(trip_id: int):
+        admin = _require_admin(get_services)
+        if admin is None:
+            return error_response("Administrator access required.", 403)
+        try:
+            get_services()[2].delete_trip(admin, trip_id)
+            return "", 204
+        except KeyError:
+            return error_response("Trip not found.", 404)
+        except ValueError as error:
+            return error_response(str(error), 409)
+        except SQLAlchemyError:
+            logger.exception("Admin trip deletion failed")
+            return error_response("Database unavailable; check configuration and migrations.", 503)
+
     @api.get("/reservations")
     def list_reservations():
+        customer_id = _require_auth()
+        if customer_id is None:
+            return error_response("Authentication required.", 401)
         try:
-            customer, _admin, _trips, reservation_service, _payments, _destinations = get_services()
-            reservations = customer.view_reservations(reservation_service)
+            _customer, _admin, _trips, reservation_service, _payments, _destinations = get_services()
+            reservations = reservation_service.get_customer_reservations(customer_id)
             return jsonify([reservation_json(item) for item in reservations])
         except SQLAlchemyError:
             logger.exception("API reservation lookup failed")
@@ -297,6 +589,9 @@ def create_api_blueprint(get_services) -> Blueprint:
 
     @api.post("/reservations")
     def create_reservation():
+        customer_id = _require_auth()
+        if customer_id is None:
+            return error_response("Authentication required.", 401)
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
             return error_response("Request body must be a JSON object.", 400)
@@ -305,8 +600,9 @@ def create_api_blueprint(get_services) -> Blueprint:
         try:
             trip_id = positive_integer(body["trip_id"], "trip_id")
             travelers = positive_integer(body.get("travelers", 1), "travelers")
-            customer, _admin, _trips, reservation_service, _payments, _destinations = get_services()
-            reservation = customer.make_reservation(
+            _customer, _admin, _trips, reservation_service, _payments, _destinations = get_services()
+            customer_obj = reservation_service.customer_repository.get_by_id(customer_id)
+            reservation = customer_obj.make_reservation(
                 reservation_service, trip_id, travelers
             )
             return jsonify(reservation_json(reservation)), 201
@@ -322,9 +618,13 @@ def create_api_blueprint(get_services) -> Blueprint:
 
     @api.post("/reservations/<int:reservation_id>/cancel")
     def cancel_reservation(reservation_id: int):
+        customer_id = _require_auth()
+        if customer_id is None:
+            return error_response("Authentication required.", 401)
         try:
-            customer, _admin, _trips, reservation_service, _payments, _destinations = get_services()
-            reservation = customer.cancel_reservation(
+            _customer, _admin, _trips, reservation_service, _payments, _destinations = get_services()
+            customer_obj = reservation_service.customer_repository.get_by_id(customer_id)
+            reservation = customer_obj.cancel_reservation(
                 reservation_service, reservation_id
             )
             return jsonify(reservation_json(reservation))
@@ -340,6 +640,9 @@ def create_api_blueprint(get_services) -> Blueprint:
 
     @api.post("/reservations/<int:reservation_id>/payments")
     def create_payment(reservation_id: int):
+        customer_id = _require_auth()
+        if customer_id is None:
+            return error_response("Authentication required.", 401)
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
             return error_response("Request body must be a JSON object.", 400)
@@ -357,13 +660,12 @@ def create_api_blueprint(get_services) -> Blueprint:
                 return error_response("amount must be a finite number.", 400)
             if "succeed" in body and not isinstance(body["succeed"], bool):
                 return error_response("succeed must be a boolean.", 400)
-            customer = get_services()[0]
             payment = get_services()[4].process_payment(
                 reservation_id,
                 amount,
                 method,
                 succeed=body.get("succeed", True),
-                customer_id=customer.id,
+                customer_id=customer_id,
             )
             return jsonify(payment_json(payment)), 201
         except KeyError as error:
@@ -378,10 +680,12 @@ def create_api_blueprint(get_services) -> Blueprint:
 
     @api.post("/payments/<int:payment_id>/refund")
     def refund_payment(payment_id: int):
+        customer_id = _require_auth()
+        if customer_id is None:
+            return error_response("Authentication required.", 401)
         try:
-            customer = get_services()[0]
             payment = get_services()[4].refund_payment(
-                payment_id, customer.id
+                payment_id, customer_id
             )
             return jsonify(payment_json(payment))
         except KeyError:
@@ -395,6 +699,56 @@ def create_api_blueprint(get_services) -> Blueprint:
             return error_response("Database unavailable; check configuration and migrations.", 503)
 
     return api
+
+
+def _require_auth() -> int | None:
+    """Return the session customer_id or None if not authenticated."""
+    return session.get(SESSION_CUSTOMER_ID_KEY)
+
+
+def _require_admin(get_services) -> Admin | None:
+    """Resolve the signed-in administrator from the session and database."""
+    admin_id = session.get(SESSION_ADMIN_ID_KEY)
+    if not admin_id:
+        return None
+    try:
+        user = get_services()[2].user_repository.get_user_by_id(admin_id)
+    except KeyError:
+        session.clear()
+        return None
+    return user if isinstance(user, Admin) else None
+
+
+def _admin_trip_values(body: dict, destination_repository) -> dict:
+    """Validate and resolve the complete editable trip payload."""
+    title = body.get("title")
+    if not isinstance(title, str) or not title.strip():
+        raise ValueError("title is required.")
+    if len(title.strip()) > 200:
+        raise ValueError("title must be 200 characters or fewer.")
+    destination_id = positive_integer(body.get("destination_id"), "destination_id")
+    try:
+        start_date = date.fromisoformat(body.get("start_date", ""))
+        end_date = date.fromisoformat(body.get("end_date", ""))
+    except (TypeError, ValueError) as error:
+        raise ValueError("start_date and end_date must be valid ISO dates.") from error
+    try:
+        price = Decimal(str(body.get("price", "")))
+    except InvalidOperation as error:
+        raise ValueError("price must be a valid number.") from error
+    if not price.is_finite() or price < 0:
+        raise ValueError("price must be a finite, non-negative number.")
+    seats = body.get("available_seats")
+    if isinstance(seats, bool) or not isinstance(seats, int) or seats < 0:
+        raise ValueError("available_seats must be a non-negative integer.")
+    return {
+        "title": title.strip(),
+        "start_date": start_date,
+        "end_date": end_date,
+        "price": price,
+        "available_seats": seats,
+        "destination": destination_repository.get_by_id(destination_id),
+    }
 
 
 def trip_json(trip: Trip) -> dict:
@@ -419,6 +773,7 @@ def destination_json(destination: Destination) -> dict:
         "name": destination.name,
         "country": destination.country,
         "description": destination.description,
+        "image_url": destination.image_url or "",
     }
 
 
@@ -462,3 +817,23 @@ def positive_integer(value, field_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise ValueError(f"{field_name} must be a positive integer.")
     return value
+
+
+def _destination_values(body: dict) -> dict:
+    """Validate and return the editable destination payload."""
+    name = body.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("name is required.")
+    if len(name.strip()) > 120:
+        raise ValueError("name must be 120 characters or fewer.")
+    country = body.get("country")
+    if not isinstance(country, str) or not country.strip():
+        raise ValueError("country is required.")
+    if len(country.strip()) > 120:
+        raise ValueError("country must be 120 characters or fewer.")
+    description = str(body.get("description", "")).strip()
+    return {
+        "name": name.strip(),
+        "country": country.strip(),
+        "description": description,
+    }

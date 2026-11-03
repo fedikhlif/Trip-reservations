@@ -27,7 +27,13 @@ def user_to_domain(model: UserModel) -> Customer | Admin:
 
 def destination_to_domain(model: DestinationModel) -> Destination:
     """Map a destination ORM row to its domain value object."""
-    return Destination(model.id, model.name, model.country, model.description or "")
+    return Destination(
+        model.id,
+        model.name,
+        model.country,
+        model.description or "",
+        model.image_url or "",
+    )
 
 
 def trip_to_domain(model: TripModel) -> Trip:

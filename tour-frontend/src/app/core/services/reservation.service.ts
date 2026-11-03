@@ -9,6 +9,8 @@ import {
   type Reservation,
 } from '../models/reservation.model';
 
+const OPTIONS = { withCredentials: true } as const;
+
 @Injectable({ providedIn: 'root' })
 export class ReservationService {
   private readonly base = `${environment.apiBaseUrl}/reservations`;
@@ -16,15 +18,15 @@ export class ReservationService {
   constructor(private readonly http: HttpClient) {}
 
   getAll(): Observable<Reservation[]> {
-    return this.http.get<Reservation[]>(this.base);
+    return this.http.get<Reservation[]>(this.base, OPTIONS);
   }
 
   create(booking: CreateReservationRequest): Observable<BookingResponse> {
-    return this.http.post<BookingResponse>(this.base, booking);
+    return this.http.post<BookingResponse>(this.base, booking, OPTIONS);
   }
 
   cancel(id: number): Observable<Reservation> {
-    return this.http.post<Reservation>(`${this.base}/${id}/cancel`, {});
+    return this.http.post<Reservation>(`${this.base}/${id}/cancel`, {}, OPTIONS);
   }
 
   pay(id: number, amount: string, method: PaymentMethod): Observable<Payment> {
@@ -32,13 +34,14 @@ export class ReservationService {
       amount,
       method,
       succeed: true,
-    });
+    }, OPTIONS);
   }
 
   refund(paymentId: number): Observable<Payment> {
     return this.http.post<Payment>(
       `${environment.apiBaseUrl}/payments/${paymentId}/refund`,
       {},
+      OPTIONS,
     );
   }
 }

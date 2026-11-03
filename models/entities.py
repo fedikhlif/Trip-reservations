@@ -82,6 +82,7 @@ class DestinationModel(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     country: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     trips: Mapped[list["TripModel"]] = relationship(back_populates="destination")
 
 

@@ -9,7 +9,7 @@ import { NgFor, NgIf } from '@angular/common';
     <header class="page-band">
       <div>
         <h1>{{ title }}</h1>
-        <p>Accueil <span>/</span> {{ current }}</p>
+        <p>Home <span>/</span> {{ current }}</p>
       </div>
     </header>
   `,
@@ -43,11 +43,11 @@ export class SectionHeadingComponent {
   template: `
     <section class="stats-band">
       <div class="stats-grid">
-        <div><strong>{{ destinationCount }}</strong><span>Destinations au catalogue</span></div>
-        <div><strong>{{ tripCount }}</strong><span>Voyages disponibles</span></div>
-        <div><strong>{{ availableSeats }}</strong><span>Places disponibles</span></div>
+        <div><strong>{{ destinationCount }}</strong><span>Destinations in our catalogue</span></div>
+        <div><strong>{{ tripCount }}</strong><span>Available trips</span></div>
+        <div><strong>{{ availableSeats }}</strong><span>Available seats</span></div>
         <button *ngIf="showAction" type="button" (click)="action.emit()">
-          Planifier mon voyage
+          Plan your trip
           <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
         </button>
       </div>

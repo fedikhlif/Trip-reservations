@@ -1,19 +1,22 @@
 """Local web interface for the trip reservation system."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 import logging
 import os
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, flash, redirect, render_template, request, session, url_for
 from flask_swagger_ui import get_swaggerui_blueprint
 from sqlalchemy.exc import SQLAlchemyError
 from dotenv import load_dotenv
 
 from api import create_api_blueprint
+from auth_api import SESSION_CUSTOMER_ID_KEY, create_auth_blueprint
 from database import Database, upgrade_schema
 from domain.enums import PaymentMethod
 from main import build_application
+from repositories.customer_repository import CustomerRepository
+from services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +25,22 @@ def create_app(database: Database | None = None) -> Flask:
     """Create the local booking site without connecting until the first request."""
     load_dotenv()
     app = Flask(__name__)
-    app.secret_key = os.getenv("FLASK_SECRET_KEY", "local-development-key")
-    app.config["DEMO_CUSTOMER_ID"] = 1
+
+    # ── Session & security configuration ────────────────────────────────────
+    secret = os.getenv("FLASK_SECRET_KEY", "local-development-key-change-in-production")
+    if secret == "local-development-key-change-in-production":
+        logger.warning(
+            "FLASK_SECRET_KEY is not set. Using insecure development key. "
+            "Set FLASK_SECRET_KEY in your .env file before deploying."
+        )
+    app.secret_key = secret
+    app.config.update(
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=os.getenv("FLASK_ENV") == "production",
+        PERMANENT_SESSION_LIFETIME=timedelta(days=7),
+        DEMO_CUSTOMER_ID=1,
+    )
     app.config["CORS_ORIGINS"] = tuple(
         origin.strip()
         for origin in os.getenv(
@@ -45,16 +62,37 @@ def create_app(database: Database | None = None) -> Flask:
             )
         return app.extensions["trip_services"]
 
-    app.register_blueprint(create_api_blueprint(services))
+    def get_auth_service() -> AuthService:
+        """Return an AuthService backed by the same database connection pool."""
+        services()  # ensure migrations have run
+        customer_repository = CustomerRepository(app.extensions["trip_database"])
+        return AuthService(customer_repository)
 
+    # ── Register blueprints ─────────────────────────────────────────────────
+    app.register_blueprint(create_api_blueprint(services, get_auth_service))
+    app.register_blueprint(create_auth_blueprint(get_auth_service))
+
+    swagger_blueprint = get_swaggerui_blueprint(
+        "/api/docs",
+        "/api/openapi.json",
+        config={"app_name": "Trip Reservation API"},
+    )
+    app.register_blueprint(swagger_blueprint, url_prefix="/api/docs")
+
+    # ── CORS ────────────────────────────────────────────────────────────────
     @app.before_request
     def handle_api_preflight():
         if request.path.startswith("/api") and request.method == "OPTIONS":
             response = app.make_response(("", 204))
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
             response.headers["Access-Control-Allow-Headers"] = (
                 "Content-Type, Authorization, Accept"
             )
+            origin = request.headers.get("Origin", "")
+            if origin in app.config["CORS_ORIGINS"]:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers.add("Vary", "Origin")
             return response
         return None
 
@@ -64,15 +102,11 @@ def create_app(database: Database | None = None) -> Flask:
             origin = request.headers.get("Origin")
             if origin in app.config["CORS_ORIGINS"]:
                 response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
                 response.headers.add("Vary", "Origin")
         return response
-    swagger_blueprint = get_swaggerui_blueprint(
-        "/api/docs",
-        "/api/openapi.json",
-        config={"app_name": "Trip Reservation API"},
-    )
-    app.register_blueprint(swagger_blueprint, url_prefix="/api/docs")
 
+    # ── Jinja2 routes (kept for legacy Flask template UI) ───────────────────
     @app.get("/")
     def index():
         destination = request.args.get("destination", "").strip()
@@ -185,6 +219,6 @@ def _safe_error(error: Exception) -> str:
 if __name__ == "__main__":
     web_app = create_app()
     try:
-        web_app.run(host="127.0.0.1", port=8082, debug=False)
+        web_app.run(host="127.0.0.1", port=8082, debug=True)
     finally:
         web_app.extensions["trip_database"].dispose()

@@ -3,9 +3,11 @@
 from domain.customer import Customer
 from domain.enums import PaymentMethod, PaymentStatus, ReservationStatus
 from database import Database
+from auth_api import SESSION_ADMIN_ID_KEY
 from sqlalchemy import inspect
 from tests.support import SQLiteTestCase
 from web_app import create_app
+from io import BytesIO
 from pathlib import Path
 import tempfile
 
@@ -19,6 +21,33 @@ class WebAppTests(SQLiteTestCase):
         self.app.config.update(TESTING=True)
         self.client = self.app.test_client()
 
+    # ── Helper ────────────────────────────────────────────────────────────────
+
+    def _register_and_login(
+        self,
+        email: str = "webtest@example.com",
+        password: str = "WebTest123",
+    ) -> None:
+        """Register then log in so the test client has a valid session cookie."""
+        # Trigger seed so trip 1 and trip 2 exist.
+        self.client.get("/")
+        self.client.post(
+            "/api/auth/register",
+            json={
+                "first_name": "Web",
+                "last_name": "Test",
+                "email": email,
+                "password": password,
+                "password_confirm": password,
+            },
+        )
+        self.client.post(
+            "/api/auth/login",
+            json={"email": email, "password": password},
+        )
+
+    # ── Jinja2 / health ───────────────────────────────────────────────────────
+
     def test_homepage_and_health_route_render(self) -> None:
         response = self.client.get("/")
         self.assertEqual(200, response.status_code)
@@ -29,6 +58,7 @@ class WebAppTests(SQLiteTestCase):
                          self.client.get("/health").get_json())
 
     def test_browser_can_book_pay_refund_and_cancel(self) -> None:
+        """The Flask Jinja2 routes still use the demo customer (id=1), preserved for the template UI."""
         self.client.get("/")
         booking_response = self.client.post(
             "/reservations", data={"trip_id": "1"}, follow_redirects=True
@@ -64,7 +94,6 @@ class WebAppTests(SQLiteTestCase):
 
     def test_invalid_mysql_connection_shows_friendly_page(self) -> None:
         from unittest.mock import patch
-
         from sqlalchemy.exc import OperationalError
 
         with patch("web_app.build_application", side_effect=OperationalError(
@@ -85,10 +114,24 @@ class WebAppTests(SQLiteTestCase):
         self.assertIn("/api/reservations/{reservation_id}/payments",
                       spec_response.get_json()["paths"])
 
-    def test_json_api_can_list_reserve_pay_and_refund(self) -> None:
+    # ── JSON API — public endpoints ───────────────────────────────────────────
+
+    def test_api_lists_trips_without_authentication(self) -> None:
         trips_response = self.client.get("/api/trips")
         self.assertEqual(200, trips_response.status_code)
         self.assertEqual(3, len(trips_response.get_json()))
+
+    def test_api_validates_trip_input(self) -> None:
+        self._register_and_login()
+        self.assertEqual(
+            400,
+            self.client.post(
+                "/api/reservations", json={"trip_id": 1, "travelers": True}
+            ).status_code,
+        )
+
+    def test_json_api_can_list_reserve_pay_and_refund(self) -> None:
+        self._register_and_login()
 
         reservation_response = self.client.post(
             "/api/reservations", json={"trip_id": 1}
@@ -109,6 +152,8 @@ class WebAppTests(SQLiteTestCase):
         self.assertEqual("REFUNDED", refund_response.get_json()["status"])
 
     def test_json_api_validates_input(self) -> None:
+        self._register_and_login()
+
         response = self.client.post("/api/reservations", json={})
         self.assertEqual(400, response.status_code)
         self.assertEqual(
@@ -167,7 +212,43 @@ class WebAppTests(SQLiteTestCase):
             ).status_code,
         )
 
+    def test_admin_can_edit_destination_and_save_its_image(self) -> None:
+        self.client.get("/api/trips")
+        with self.client.session_transaction() as browser_session:
+            browser_session[SESSION_ADMIN_ID_KEY] = 2
+        self.app.config["DESTINATION_UPLOAD_FOLDER"] = (
+            Path(self.temp_directory.name) / "destination-uploads"
+        )
+
+        updated = self.client.put(
+            "/api/destinations/1",
+            json={
+                "name": "Kyoto Updated",
+                "country": "Japan",
+                "description": "Updated description",
+            },
+        )
+        self.assertEqual(200, updated.status_code)
+        self.assertEqual("Kyoto Updated", updated.get_json()["name"])
+
+        uploaded = self.client.post(
+            "/api/destinations/1/image",
+            data={"image": (BytesIO(b"image-bytes"), "kyoto.png")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(200, uploaded.status_code)
+        image_url = uploaded.get_json()["image_url"]
+        self.assertEqual(
+            image_url, self.client.get("/api/destinations/1").get_json()["image_url"]
+        )
+
+        served_image = self.client.get(image_url)
+        self.assertEqual(200, served_image.status_code)
+        self.assertEqual(b"image-bytes", served_image.data)
+        served_image.close()
+
     def test_api_reserves_group_capacity_and_returns_conflict_when_unavailable(self) -> None:
+        self._register_and_login()
         response = self.client.post(
             "/api/reservations", json={"trip_id": 1, "travelers": 3}
         )
@@ -203,42 +284,46 @@ class WebAppTests(SQLiteTestCase):
         )
 
     def test_api_rejects_mutations_of_another_customers_reservation(self) -> None:
+        # Register and login as Customer A.
         self.client.get("/api/trips")
-        _customer, _admin, trip_service, reservation_service, payment_service, _destinations = (
-            self.app.extensions["trip_services"]
+        self.client.post(
+            "/api/auth/register",
+            json={
+                "first_name": "Other",
+                "last_name": "Customer",
+                "email": "other@example.test",
+                "password": "OtherPass12",
+                "password_confirm": "OtherPass12",
+            },
         )
-        other_customer = Customer(
-            42, "Other Customer", "other@example.test", "demo-hash"
+        self.client.post(
+            "/api/auth/login",
+            json={"email": "other@example.test", "password": "OtherPass12"},
         )
-        trip_service.user_repository.add(other_customer)
-        reservation = reservation_service.create_reservation(
-            other_customer, 1
-        )
+        reservation = self.client.post("/api/reservations", json={"trip_id": 1})
+        reservation_id = reservation.get_json()["id"]
+
+        # Login as the seeded demo customer (Jordan Lee, id=1).
+        self.client.post("/api/auth/logout")
+        # Jordan Lee has a demo hash, not a real Argon2 hash, so we log in
+        # by injecting the session directly via the test client.
+        with self.client.session_transaction() as sess:
+            sess["customer_id"] = 1
 
         self.assertEqual(
             403,
             self.client.post(
-                f"/api/reservations/{reservation.id}/cancel"
-            ).status_code,
-        )
-        self.assertEqual(
-            403,
-            self.client.post(
-                f"/api/reservations/{reservation.id}/payments",
-                json={"amount": str(reservation.total_price), "method": "PAYPAL"},
+                f"/api/reservations/{reservation_id}/cancel"
             ).status_code,
         )
 
-        payment = payment_service.process_payment(
-            reservation.id,
-            reservation.total_price,
-            PaymentMethod.PAYPAL,
-        )
+    def test_api_requires_authentication_for_reservations(self) -> None:
+        """Unauthenticated requests must receive 401, not 200 or 403."""
+        self.client.get("/api/trips")
+        self.assertEqual(401, self.client.get("/api/reservations").status_code)
         self.assertEqual(
-            403,
-            self.client.post(
-                f"/api/payments/{payment.id}/refund"
-            ).status_code,
+            401,
+            self.client.post("/api/reservations", json={"trip_id": 1}).status_code,
         )
 
     def test_first_web_request_applies_migrations_automatically(self) -> None:

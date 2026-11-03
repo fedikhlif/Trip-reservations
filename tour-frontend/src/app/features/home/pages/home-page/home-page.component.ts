@@ -27,42 +27,42 @@ import { SectionHeadingComponent, StatsBandComponent } from '../../../../shared/
       <div class="hero-overlay"></div>
       <div class="hero-layout">
         <div class="hero-message">
-          <p><i></i>Explorez le monde avec nous</p>
-          <h1>Découvrez votre voyage idéal</h1>
-          <span>Des aventures inoubliables, des destinations d'exception et des souvenirs qui durent toute une vie.</span>
+          <p><i></i>Explore the world with us</p>
+          <h1>Discover your perfect trip</h1>
+          <span>Unforgettable adventures, exceptional destinations, and memories that last a lifetime.</span>
           <div>
             <button type="button" (click)="goToDestinations()">
-              Commencer l'exploration
+              Start exploring
               <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
             </button>
-            <button type="button" (click)="router.navigate(['/circuits'])">Parcourir les circuits</button>
+            <button type="button" (click)="router.navigate(['/circuits'])">Browse tours</button>
           </div>
         </div>
 
         <form class="hero-booking-card" (ngSubmit)="onSearch()">
-          <h2>Planifiez votre aventure</h2>
-          <p *ngIf="destinationsLoading" role="status">Chargement des destinations…</p>
+          <h2>Plan your adventure</h2>
+          <p *ngIf="destinationsLoading" role="status">Loading destinations…</p>
           <p *ngIf="destinationsError" class="api-error" role="alert">{{ destinationsError }}</p>
           <label>
             Destination
             <select [(ngModel)]="destinationId" name="destination" required [disabled]="destinationsLoading || !!destinationsError">
-              <option [ngValue]="null">Choisissez votre destination</option>
+              <option [ngValue]="null">Choose your destination</option>
               <option *ngFor="let d of destinations" [ngValue]="d.id">{{ d.name }}, {{ d.country }}</option>
             </select>
           </label>
           <div class="form-columns">
-            <label>Date de départ<input type="date" [(ngModel)]="departureDate" name="departureDate" [min]="today" required /></label>
-            <label>Date de retour<input type="date" [(ngModel)]="returnDate" name="returnDate" [min]="departureDate || today" required /></label>
+            <label>Departure date<input type="date" [(ngModel)]="departureDate" name="departureDate" [min]="today" required /></label>
+            <label>Return date<input type="date" [(ngModel)]="returnDate" name="returnDate" [min]="departureDate || today" required /></label>
           </div>
           <label>
-            Voyageurs
+            Travellers
             <select [(ngModel)]="travelers" name="travelers">
-              <option *ngFor="let count of travelerOptions" [ngValue]="count">{{ count }} voyageur{{ count > 1 ? 's' : '' }}</option>
+              <option *ngFor="let count of travelerOptions" [ngValue]="count">{{ count }} traveller{{ count > 1 ? 's' : '' }}</option>
             </select>
           </label>
           <p *ngIf="searchError" class="api-error" role="alert">{{ searchError }}</p>
           <button type="submit" [disabled]="destinationsLoading || !!destinationsError">
-            Trouver mon voyage
+            Find my trip
             <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
           </button>
         </form>
@@ -71,10 +71,10 @@ import { SectionHeadingComponent, StatsBandComponent } from '../../../../shared/
 
     <section class="content-section">
       <div class="content-shell">
-        <app-section-heading eyebrow="Destinations" title="Évadez-vous vers l'exception">
-          Découvrez les destinations enregistrées dans notre catalogue de voyages.
+        <app-section-heading eyebrow="Destinations" title="Escape to somewhere extraordinary">
+          Explore the destinations in our travel catalogue.
         </app-section-heading>
-        <p *ngIf="destinationsLoading" role="status">Chargement des destinations…</p>
+        <p *ngIf="destinationsLoading" role="status">Loading destinations…</p>
         <p *ngIf="destinationsError" class="api-error" role="alert">{{ destinationsError }}</p>
         <div *ngIf="!destinationsLoading && !destinationsError && destinations.length" class="cards-grid">
           <app-destination-card
@@ -84,28 +84,28 @@ import { SectionHeadingComponent, StatsBandComponent } from '../../../../shared/
           />
         </div>
         <div *ngIf="!destinationsLoading && !destinationsError && !destinations.length" class="empty-state">
-          <h3>Aucune destination disponible</h3>
-          <p>Les destinations apparaîtront ici dès qu'elles seront publiées.</p>
+          <h3>No destinations available</h3>
+          <p>Destinations will appear here once they are published.</p>
         </div>
-        <button class="outline-action" type="button" (click)="goToDestinations()">Voir toutes les destinations</button>
+        <button class="outline-action" type="button" (click)="goToDestinations()">View all destinations</button>
       </div>
     </section>
 
     <section class="content-section muted-section">
       <div class="content-shell">
-        <app-section-heading eyebrow="Circuits" title="Voyagez à votre rythme">
-          Choisissez parmi les voyages réellement disponibles et consultez leurs dates, prix et places.
+        <app-section-heading eyebrow="Tours" title="Travel at your own pace">
+          Choose from available trips and check their dates, prices, and seat availability.
         </app-section-heading>
-        <p *ngIf="tripsLoading" role="status">Chargement des voyages…</p>
+        <p *ngIf="tripsLoading" role="status">Loading trips…</p>
         <p *ngIf="tripsError" class="api-error" role="alert">{{ tripsError }}</p>
         <div *ngIf="!tripsLoading && !tripsError && trips.length" class="cards-grid">
           <app-trip-card *ngFor="let trip of featuredTrips" [trip]="trip" (book)="goToTrip($event)" />
         </div>
         <div *ngIf="!tripsLoading && !tripsError && !trips.length" class="empty-state">
-          <h3>Aucun voyage disponible</h3>
-          <p>Les prochains voyages publiés apparaîtront ici.</p>
+          <h3>No trips available</h3>
+          <p>New trips will appear here once they are published.</p>
         </div>
-        <button class="outline-action" type="button" (click)="router.navigate(['/circuits'])">Parcourir les circuits</button>
+        <button class="outline-action" type="button" (click)="router.navigate(['/circuits'])">Browse tours</button>
       </div>
     </section>
 
@@ -113,16 +113,16 @@ import { SectionHeadingComponent, StatsBandComponent } from '../../../../shared/
       <div class="home-about-image">
         <img
           src="https://images.unsplash.com/photo-1769365684859-363edb643bbf?auto=format&fit=crop&w=1200&q=85"
-          alt="Voyageurs admirant un panorama" loading="lazy"
+          alt="Travellers admiring a view" loading="lazy"
         />
-        <span><strong>TOUR</strong> votre prochain voyage</span>
+        <span><strong>TOUR</strong> your next trip</span>
       </div>
       <div>
-        <p>À propos de Tour</p>
-        <h2>Nous créons des expériences de voyage inoubliables</h2>
-        <span>Notre équipe imagine des itinéraires authentiques, soutenus par des experts locaux et un accompagnement attentif à chaque étape.</span>
+        <p>About Tour</p>
+        <h2>We create unforgettable travel experiences</h2>
+        <span>Our team creates authentic itineraries with the support of local experts and thoughtful guidance at every step.</span>
         <button type="button" (click)="router.navigate(['/a-propos'])">
-          En savoir plus
+          Learn more
           <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
         </button>
       </div>
@@ -208,15 +208,15 @@ export class HomePageComponent implements OnInit {
   onSearch(): void {
     this.searchError = '';
     if (!this.destinationId || !this.departureDate || !this.returnDate) {
-      this.searchError = 'Choisissez une destination ainsi que vos dates de départ et de retour.';
+      this.searchError = 'Choose a destination, departure date, and return date.';
       return;
     }
     if (this.departureDate < this.today) {
-      this.searchError = 'La date de départ doit être aujourd’hui ou ultérieure.';
+      this.searchError = 'The departure date must be today or later.';
       return;
     }
     if (this.returnDate < this.departureDate) {
-      this.searchError = 'La date de retour ne peut pas précéder la date de départ.';
+      this.searchError = 'The return date cannot be before the departure date.';
       return;
     }
     this.router.navigate(['/reservation'], {

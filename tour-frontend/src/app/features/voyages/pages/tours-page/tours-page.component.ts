@@ -15,21 +15,21 @@ import { PageHeaderComponent } from '../../../../shared/components/site-parts/si
   standalone: true,
   imports: [FormsModule, NgFor, NgIf, TripCardComponent, PageHeaderComponent],
   template: `
-    <app-page-header title="Circuits" current="Circuits" />
+    <app-page-header title="Tours" current="Tours" />
     <main class="listing-page">
       <div class="content-shell">
         <div class="listing-intro">
           <div>
-            <p>Voyages disponibles</p>
-            <h2>Choisissez le circuit qui vous ressemble</h2>
+            <p>Available trips</p>
+            <h2>Find the tour that suits you</h2>
           </div>
           <label class="sort-field">
-            Trier par
+            Sort by
             <select [(ngModel)]="sort">
-              <option value="date">Date de départ (plus proche)</option>
-              <option value="low">Prix croissant</option>
-              <option value="high">Prix décroissant</option>
-              <option value="alpha">Destination (A à Z)</option>
+              <option value="date">Departure date (soonest first)</option>
+              <option value="low">Price (lowest first)</option>
+              <option value="high">Price (highest first)</option>
+              <option value="alpha">Destination (A to Z)</option>
             </select>
           </label>
         </div>
@@ -38,46 +38,46 @@ import { PageHeaderComponent } from '../../../../shared/components/site-parts/si
           <label>
             Destination
             <select [(ngModel)]="destinationId" name="destinationId" [disabled]="destinationsLoading" (ngModelChange)="search()">
-              <option [ngValue]="null">Toutes les destinations</option>
+              <option [ngValue]="null">All destinations</option>
               <option *ngFor="let destination of destinations" [ngValue]="destination.id">
                 {{ destination.name }}, {{ destination.country }}
               </option>
             </select>
           </label>
           <label>
-            Budget maximal (par voyageur)
+            Maximum budget (per traveller)
             <select [(ngModel)]="maxPrice" name="maxPrice" (ngModelChange)="search()">
-              <option [ngValue]="null">Tous les budgets</option>
-              <option [ngValue]="1000">Jusqu'à 1 000 €</option>
-              <option [ngValue]="1500">Jusqu'à 1 500 €</option>
-              <option [ngValue]="2000">Jusqu'à 2 000 €</option>
-              <option [ngValue]="3000">Jusqu'à 3 000 €</option>
-              <option [ngValue]="5000">Jusqu'à 5 000 €</option>
+              <option [ngValue]="null">Any budget</option>
+              <option [ngValue]="1000">Up to €1,000</option>
+              <option [ngValue]="1500">Up to €1,500</option>
+              <option [ngValue]="2000">Up to €2,000</option>
+              <option [ngValue]="3000">Up to €3,000</option>
+              <option [ngValue]="5000">Up to €5,000</option>
             </select>
           </label>
           <label>
-            Voyageurs
+            Travellers
             <select [(ngModel)]="travelers" name="travelers" (ngModelChange)="search()">
               <option *ngFor="let count of travelerOptions" [ngValue]="count">
-                {{ count }} voyageur{{ count > 1 ? 's' : '' }}
+                {{ count }} traveller{{ count > 1 ? 's' : '' }}
               </option>
             </select>
           </label>
           <button type="submit" [disabled]="loading">
             <span *ngIf="loading" class="spinner"></span>
-            Rechercher
+            Search
           </button>
         </form>
 
-        <p *ngIf="loading" role="status">Recherche des voyages disponibles…</p>
+        <p *ngIf="loading" role="status">Searching available trips…</p>
         <div *ngIf="error" class="api-error" role="alert">
           <p>{{ error }}</p>
-          <button type="button" (click)="search()">Réessayer</button>
+          <button type="button" (click)="search()">Try again</button>
         </div>
 
         <ng-container *ngIf="!loading && !error">
           <p class="result-count">
-            <strong>{{ visibleTrips.length }}</strong> voyage{{ visibleTrips.length !== 1 ? 's' : '' }} disponible{{ visibleTrips.length !== 1 ? 's' : '' }}
+            <strong>{{ visibleTrips.length }}</strong> available trip{{ visibleTrips.length !== 1 ? 's' : '' }}
           </p>
 
           <div *ngIf="visibleTrips.length; else empty" class="cards-grid">
@@ -91,10 +91,10 @@ import { PageHeaderComponent } from '../../../../shared/components/site-parts/si
 
           <ng-template #empty>
             <div class="empty-state">
-              <h3>Aucun voyage trouvé</h3>
-              <p>Aucun circuit ne correspond à vos critères de recherche. Essayez d'augmenter votre budget ou de réduire le nombre de voyageurs.</p>
+              <h3>No trips found</h3>
+              <p>No tours match your search criteria. Try increasing your budget or reducing the number of travellers.</p>
               <button type="button" class="outline-action" (click)="resetFilters()">
-                Réinitialiser les filtres
+                Reset filters
               </button>
             </div>
           </ng-template>

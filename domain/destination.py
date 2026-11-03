@@ -1,6 +1,6 @@
 """Destination value object."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -11,3 +11,4 @@ class Destination:
     name: str
     country: str
     description: str
+    image_url: str = field(default="")

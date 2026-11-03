@@ -12,13 +12,34 @@ from sqlalchemy import URL, create_engine, event
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
+# Absolute path to the project root (directory that contains this file).
+_PROJECT_ROOT = Path(__file__).parent.resolve()
+
 
 def database_url_from_environment():
-    """Build a SQLAlchemy URL from DATABASE_URL or the DB_* variables."""
-    load_dotenv()
+    """Build a SQLAlchemy URL from DATABASE_URL or the DB_* variables.
+
+    The .env file is loaded relative to this file's directory so the Flask
+    debug-mode reloader (which may run from a different working directory on
+    Windows) always finds it.
+
+    For SQLite, a relative ``database`` path is resolved to an absolute path
+    anchored at the project root so every process in the reloader process group
+    connects to the same database file.
+    """
+    load_dotenv(dotenv_path=_PROJECT_ROOT / ".env")
     configured_url = os.getenv("DATABASE_URL")
     if configured_url:
-        return make_url(configured_url)
+        url = make_url(configured_url)
+        # Make relative SQLite paths absolute so debug reloader uses same file.
+        if (
+            url.drivername.startswith("sqlite")
+            and url.database
+            and not Path(url.database).is_absolute()
+        ):
+            abs_db = str(_PROJECT_ROOT / url.database)
+            return make_url(f"sqlite:///{abs_db}")
+        return url
 
     missing = [
         name for name in ("DB_NAME", "DB_USER", "DB_PASSWORD")

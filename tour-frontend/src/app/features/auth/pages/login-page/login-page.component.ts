@@ -1,0 +1,382 @@
+import { Component, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { NgIf } from '@angular/common';
+import { Router, RouterLink, ActivatedRoute } from '@angular/router';
+import { AuthService } from '../../../../core/services/auth.service';
+
+@Component({
+  selector: 'app-login-page',
+  standalone: true,
+  imports: [FormsModule, NgIf, RouterLink],
+  template: `
+    <div class="auth-shell">
+      <!-- Left: travel visual -->
+      <div class="auth-visual" aria-hidden="true">
+        <div class="auth-visual-overlay"></div>
+        <div class="auth-visual-content">
+          <span class="auth-brand">TOUR</span>
+          <p>Your dream trips, within reach.</p>
+        </div>
+      </div>
+
+      <!-- Right: form -->
+      <main class="auth-form-panel" id="login-main">
+        <div class="auth-form-card">
+          <!-- Logo for small screens -->
+          <a routerLink="/" class="auth-mobile-brand" aria-label="TOUR — Home">TOUR</a>
+
+          <header class="auth-form-header">
+            <h1>Welcome back</h1>
+            <p>Log in to manage your trips and bookings.</p>
+          </header>
+
+          <form (ngSubmit)="submit()" novalidate aria-label="Log in">
+            <!-- Error banner -->
+            <div *ngIf="error()" class="auth-error" role="alert" aria-live="polite">
+              {{ error() }}
+            </div>
+
+            <!-- Email -->
+            <div class="auth-field">
+              <label for="login-email">Email address</label>
+              <input
+                id="login-email"
+                type="email"
+                name="email"
+                autocomplete="email"
+                placeholder="you@example.com"
+                [(ngModel)]="email"
+                [class.input-error]="submitted && !emailValid()"
+                required
+                aria-required="true"
+                [attr.aria-invalid]="submitted && !emailValid() ? 'true' : null"
+                aria-describedby="login-email-err"
+              />
+              <span
+                *ngIf="submitted && !emailValid()"
+                id="login-email-err"
+                class="field-error"
+                role="alert"
+              >Please enter a valid email address.</span>
+            </div>
+
+            <!-- Password -->
+            <div class="auth-field">
+              <label for="login-password">Password</label>
+              <div class="password-combo">
+                <input
+                  id="login-password"
+                  [type]="showPassword() ? 'text' : 'password'"
+                  name="password"
+                  autocomplete="current-password"
+                  placeholder="Your password"
+                  [(ngModel)]="password"
+                  [class.input-error]="submitted && !password"
+                  required
+                  aria-required="true"
+                  [attr.aria-invalid]="submitted && !password ? 'true' : null"
+                  aria-describedby="login-pw-err"
+                />
+                <button
+                  type="button"
+                  class="pw-toggle"
+                  [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+                  (click)="toggleShowPassword()"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path *ngIf="!showPassword()" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle *ngIf="!showPassword()" cx="12" cy="12" r="3"/>
+                    <path *ngIf="showPassword()" d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/>
+                    <line *ngIf="showPassword()" x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+              <span
+                *ngIf="submitted && !password"
+                id="login-pw-err"
+                class="field-error"
+                role="alert"
+              >Password is required.</span>
+            </div>
+
+            <!-- Submit -->
+            <button
+              id="login-submit"
+              type="submit"
+              class="auth-submit-btn"
+              [disabled]="loading()"
+            >
+              <span *ngIf="loading()" class="auth-spinner" aria-hidden="true"></span>
+              {{ loading() ? 'Logging in…' : 'Log in' }}
+            </button>
+          </form>
+
+          <p class="auth-switch">
+            Don't have an account yet?
+            <a routerLink="/register" id="login-to-register">Create an account</a>
+          </p>
+        </div>
+      </main>
+    </div>
+  `,
+  styles: [`
+    @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@700;800&family=Roboto:wght@300;400;600&display=swap');
+    :host { display: block; }
+
+    .auth-shell {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Visual panel ── */
+    .auth-visual {
+      position: relative;
+      background: url('https://images.unsplash.com/photo-1530789253388-582c481c54b0?auto=format&fit=crop&w=1400&q=88') center/cover;
+      display: flex;
+      align-items: flex-end;
+    }
+    .auth-visual-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(6,62,73,.92) 0%, rgba(8,145,178,.55) 100%);
+    }
+    .auth-visual-content {
+      position: relative;
+      z-index: 1;
+      padding: 48px;
+      color: #fff;
+    }
+    .auth-brand {
+      display: block;
+      font-family: 'Raleway', sans-serif;
+      font-size: 40px;
+      font-weight: 800;
+      letter-spacing: .18em;
+      margin-bottom: 16px;
+    }
+    .auth-visual-content p {
+      font-size: 18px;
+      font-weight: 300;
+      color: rgba(255,255,255,.82);
+      line-height: 1.6;
+      margin: 0;
+      max-width: 320px;
+    }
+
+    /* ── Form panel ── */
+    .auth-form-panel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f5f8f8;
+      padding: 40px 24px;
+    }
+    .auth-form-card {
+      width: 100%;
+      max-width: 420px;
+    }
+    .auth-mobile-brand {
+      display: none;
+      font-family: 'Raleway', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: .18em;
+      color: #0891b2;
+      text-decoration: none;
+      margin-bottom: 28px;
+    }
+
+    /* ── Header ── */
+    .auth-form-header { margin-bottom: 32px; }
+    .auth-form-header h1 {
+      font-family: 'Raleway', sans-serif;
+      font-size: 30px;
+      font-weight: 700;
+      color: #1a2526;
+      margin: 0 0 8px;
+      letter-spacing: -.02em;
+    }
+    .auth-form-header p {
+      margin: 0;
+      color: #6e7778;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    /* ── Error ── */
+    .auth-error {
+      margin-bottom: 20px;
+      padding: 13px 16px;
+      border: 1px solid #f0c6c2;
+      border-radius: 10px;
+      background: #fff4f2;
+      color: #9c3027;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Fields ── */
+    .auth-field {
+      display: grid;
+      gap: 7px;
+      margin-bottom: 20px;
+    }
+    .auth-field label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #3a4445;
+    }
+    .auth-field input {
+      height: 52px;
+      width: 100%;
+      padding: 0 15px;
+      border: 1.5px solid #c8d3d4;
+      border-radius: 12px;
+      background: #fff;
+      color: #1a2526;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 180ms, box-shadow 180ms;
+    }
+    .auth-field input:focus {
+      border-color: #0891b2;
+      box-shadow: 0 0 0 3px rgba(8,145,178,.14);
+    }
+    .auth-field input.input-error {
+      border-color: #c94141;
+      box-shadow: 0 0 0 3px rgba(201,65,65,.1);
+    }
+    .field-error {
+      font-size: 12px;
+      color: #c94141;
+    }
+
+    /* ── Password combo ── */
+    .password-combo {
+      position: relative;
+    }
+    .password-combo input {
+      padding-right: 50px;
+    }
+    .pw-toggle {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: 0;
+      cursor: pointer;
+      color: #7a8788;
+      padding: 4px;
+      line-height: 0;
+    }
+    .pw-toggle svg {
+      width: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .pw-toggle:hover { color: #0891b2; }
+
+    /* ── Submit ── */
+    .auth-submit-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 52px;
+      margin-top: 8px;
+      border: 0;
+      border-radius: 999px;
+      background: #0891b2;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 200ms, transform 120ms;
+    }
+    .auth-submit-btn:hover:not(:disabled) { background: #0780a0; }
+    .auth-submit-btn:active:not(:disabled) { transform: scale(.98); }
+    .auth-submit-btn:disabled { opacity: .65; cursor: not-allowed; }
+
+    /* ── Spinner ── */
+    .auth-spinner {
+      width: 17px;
+      height: 17px;
+      border: 2px solid rgba(255,255,255,.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 700ms linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Switch link ── */
+    .auth-switch {
+      margin-top: 24px;
+      text-align: center;
+      color: #6e7778;
+      font-size: 14px;
+    }
+    .auth-switch a {
+      color: #0891b2;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .auth-switch a:hover { text-decoration: underline; }
+
+    /* ── Responsive ── */
+    @media (max-width: 860px) {
+      .auth-shell { grid-template-columns: 1fr; }
+      .auth-visual { display: none; }
+      .auth-mobile-brand { display: block; }
+    }
+  `],
+})
+export class LoginPageComponent {
+  email = '';
+  password = '';
+  submitted = false;
+  loading = signal(false);
+  error = signal('');
+  showPassword = signal(false);
+
+  constructor(
+    private readonly auth: AuthService,
+    private readonly router: Router,
+    private readonly route: ActivatedRoute,
+  ) {}
+
+  emailValid(): boolean {
+    return /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(this.email);
+  }
+
+  toggleShowPassword(): void {
+    this.showPassword.update((v) => !v);
+  }
+
+  submit(): void {
+    this.submitted = true;
+    this.error.set('');
+
+    if (!this.emailValid() || !this.password) {
+      return;
+    }
+
+    this.loading.set(true);
+    this.auth.login({ email: this.email, password: this.password }).subscribe({
+      next: () => {
+        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl')
+          || (this.auth.isAdmin() ? '/admin/trips' : '/mes-reservations');
+        this.router.navigateByUrl(returnUrl);
+      },
+      error: (err: Error) => {
+        this.error.set(err.message);
+        this.loading.set(false);
+      },
+    });
+  }
+}

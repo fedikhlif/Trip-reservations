@@ -1,9 +1,11 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NgClass, NgFor, NgIf } from '@angular/common';
 import { Observable } from 'rxjs';
+import { RouterLink } from '@angular/router';
 import { PageHeaderComponent } from '../../../../shared/components/site-parts/site-parts.component';
 import { ReservationService } from '../../../../core/services/reservation.service';
+import { AuthService } from '../../../../core/services/auth.service';
 import { type PaymentMethod } from '../../../../core/models/payment.model';
 import { type Reservation, type ReservationStatus } from '../../../../core/models/reservation.model';
 import { apiErrorMessage } from '../../../../core/utils/api-error-message';
@@ -14,54 +16,52 @@ type PendingAction = 'cancel' | 'refund';
 @Component({
   selector: 'app-my-reservations-page',
   standalone: true,
-  imports: [FormsModule, NgIf, NgFor, NgClass, PageHeaderComponent],
+  imports: [FormsModule, NgIf, NgFor, NgClass, PageHeaderComponent, RouterLink],
   template: `
-    <app-page-header title="Mes réservations" current="Réservations" />
+    <app-page-header title="My bookings" current="Bookings" />
     <main class="listing-page">
       <div class="content-shell">
-        <div class="demo-notice" role="note">
-          Espace de démonstration : ces opérations utilisent le compte de test « Jordan Lee ».
-          Aucune authentification client n'est configurée.
-        </div>
 
         <div class="platform-title-row">
           <header class="platform-heading">
-            <p>Espace personnel</p>
-            <h2>Mes réservations</h2>
-            <span>Consultez les voyages, les montants enregistrés et les statuts fournis par le serveur.</span>
+            <p>Personal area</p>
+            <h2>Hello, {{ auth.firstName() }} 👋</h2>
+            <span>View your booked trips, their status, and your payments.</span>
           </header>
           <label class="platform-filter">
-            Filtrer par statut
+            Filter by status
             <select [(ngModel)]="statusFilter">
-              <option value="ALL">Toutes</option>
-              <option value="PENDING">En attente</option>
-              <option value="CONFIRMED">Confirmée</option>
-              <option value="CANCELLED">Annulée</option>
+              <option value="ALL">All</option>
+              <option value="PENDING">Pending</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="CANCELLED">Cancelled</option>
             </select>
           </label>
         </div>
 
-        <p *ngIf="loading" role="status">Chargement des réservations…</p>
+        <p *ngIf="loading" class="page-loader" role="status">
+          <i aria-hidden="true"></i>Loading bookings…
+        </p>
         <p *ngIf="error" class="api-error" role="alert">{{ error }}</p>
         <p *ngIf="success" class="api-success" role="status">{{ success }}</p>
 
         <ng-container *ngIf="!loading && !error">
           <div *ngIf="filteredReservations.length; else empty" class="reservation-list">
             <article class="reservation-row" *ngFor="let reservation of filteredReservations">
-              <div><small>Référence</small><strong>#{{ reservation.id }}</strong></div>
-              <div><small>Voyage</small><strong>{{ reservation.trip_title }}</strong></div>
+              <div><small>Reference</small><strong>#{{ reservation.id }}</strong></div>
+              <div><small>Trip</small><strong>{{ reservation.trip_title }}</strong></div>
               <div><small>Dates</small><strong>{{ formatDate(reservation.start_date) }} – {{ formatDate(reservation.end_date) }}</strong></div>
-              <div><small>Voyageurs</small><strong>{{ reservation.traveler_count }}</strong></div>
-              <div><small>Montant</small><strong>{{ formatPrice(reservation.total_price) }}</strong></div>
+              <div><small>Travellers</small><strong>{{ reservation.traveler_count }}</strong></div>
+              <div><small>Amount</small><strong>{{ formatPrice(reservation.total_price) }}</strong></div>
               <span class="status-badge" [ngClass]="statusClass(reservation.status)">{{ statusLabel(reservation.status) }}</span>
               <div class="reservation-actions">
-                <button type="button" (click)="selectedReservation = reservation">Détails</button>
+                <button type="button" (click)="selectedReservation = reservation">Details</button>
                 <label *ngIf="reservation.status === 'PENDING' && !reservation.payment" class="payment-method">
-                  Mode de paiement (simulation)
+                  Payment method (simulated)
                   <select [(ngModel)]="paymentMethod" [ngModelOptions]="{ standalone: true }">
-                    <option value="CREDIT_CARD">Carte bancaire</option>
+                    <option value="CREDIT_CARD">Credit card</option>
                     <option value="PAYPAL">PayPal</option>
-                    <option value="BANK_TRANSFER">Virement</option>
+                    <option value="BANK_TRANSFER">Bank transfer</option>
                   </select>
                 </label>
                 <button
@@ -69,67 +69,75 @@ type PendingAction = 'cancel' | 'refund';
                   type="button"
                   [disabled]="workingId === reservation.id"
                   (click)="pay(reservation)"
-                >Simuler le paiement</button>
+                >Simulate payment</button>
                 <button
                   *ngIf="canCancel(reservation)"
                   type="button"
                   [disabled]="workingId === reservation.id"
                   (click)="requestAction(reservation, 'cancel')"
-                >Annuler</button>
+                >Cancel</button>
                 <button
                   *ngIf="reservation.payment?.status === 'COMPLETED'"
                   type="button"
                   [disabled]="workingId === reservation.id"
                   (click)="requestAction(reservation, 'refund')"
-                >Simuler le remboursement</button>
+                >Simulate refund</button>
               </div>
             </article>
           </div>
           <ng-template #empty>
             <div class="empty-state">
-              <h3>Aucune réservation</h3>
-              <p>Les réservations créées pour le compte de démonstration apparaîtront ici.</p>
+              <h3>No bookings yet</h3>
+              <p>You don't have any bookings yet. Explore our trips!</p>
+              <a routerLink="/destinations" class="outline-action" style="display:inline-flex;align-items:center;gap:8px;margin-top:20px;">
+                Explore destinations
+              </a>
             </div>
           </ng-template>
         </ng-container>
 
+        <!-- Detail modal -->
         <div *ngIf="selectedReservation" class="platform-modal-backdrop" (click)="selectedReservation = null">
           <section class="reservation-detail-modal" role="dialog" aria-modal="true" aria-labelledby="reservation-title" (click)="$event.stopPropagation()">
-            <button class="platform-close" type="button" (click)="selectedReservation = null" aria-label="Fermer">×</button>
-            <small>Réservation #{{ selectedReservation.id }}</small>
+            <button class="platform-close" type="button" (click)="selectedReservation = null" aria-label="Close">×</button>
+            <small>Booking #{{ selectedReservation.id }}</small>
             <h2 id="reservation-title">{{ selectedReservation.trip_title }}</h2>
             <p>{{ selectedReservation.destination }}, {{ selectedReservation.country }}</p>
             <span class="status-badge" [ngClass]="statusClass(selectedReservation.status)">{{ statusLabel(selectedReservation.status) }}</span>
             <div class="reservation-detail-grid">
               <div><span>Dates</span><strong>{{ formatDate(selectedReservation.start_date) }} – {{ formatDate(selectedReservation.end_date) }}</strong></div>
-              <div><span>Voyageurs</span><strong>{{ selectedReservation.traveler_count }}</strong></div>
-              <div><span>Montant</span><strong>{{ formatPrice(selectedReservation.total_price) }}</strong></div>
-              <div><span>Paiement</span><strong>{{ paymentLabel(selectedReservation) }}</strong></div>
+              <div><span>Travellers</span><strong>{{ selectedReservation.traveler_count }}</strong></div>
+              <div><span>Amount</span><strong>{{ formatPrice(selectedReservation.total_price) }}</strong></div>
+              <div><span>Payment</span><strong>{{ paymentLabel(selectedReservation) }}</strong></div>
             </div>
-            <p>Le paiement et le remboursement disponibles dans cette démo sont simulés ; aucun prestataire bancaire n'est connecté.</p>
+            <p>Payments and refunds in this demo are simulated; no payment provider is connected.</p>
           </section>
         </div>
 
+        <!-- Confirm dialog -->
         <div *ngIf="actionTarget" class="platform-modal-backdrop">
           <section class="confirm-dialog" role="alertdialog" aria-modal="true">
             <span>!</span>
-            <h2>{{ pendingAction === 'cancel' ? 'Confirmer l’annulation ?' : 'Confirmer le remboursement simulé ?' }}</h2>
+            <h2>{{ pendingAction === 'cancel' ? 'Cancel this booking?' : 'Confirm simulated refund?' }}</h2>
             <p>
               {{ pendingAction === 'cancel'
-                ? 'La réservation #' + actionTarget.id + ' sera annulée et ses places libérées.'
-                : 'Le paiement de la réservation #' + actionTarget.id + ' sera marqué comme remboursé et la réservation annulée.' }}
+                ? 'Booking #' + actionTarget.id + ' will be cancelled and its seats released.'
+                : 'The payment for booking #' + actionTarget.id + ' will be marked as refunded and the booking cancelled.' }}
             </p>
             <div>
-              <button type="button" (click)="actionTarget = null">Retour</button>
-              <button type="button" [disabled]="workingId === actionTarget.id" (click)="executeAction()">Confirmer</button>
+              <button type="button" (click)="actionTarget = null">Back</button>
+              <button type="button" [disabled]="workingId === actionTarget.id" (click)="executeAction()">Confirm</button>
             </div>
           </section>
         </div>
+
       </div>
     </main>
   `,
 })
 export class MyReservationsPageComponent implements OnInit {
+  readonly auth = inject(AuthService);
+
   reservations: Reservation[] = [];
   statusFilter: StatusFilter = 'ALL';
   paymentMethod: PaymentMethod = 'CREDIT_CARD';
@@ -179,7 +187,7 @@ export class MyReservationsPageComponent implements OnInit {
       this.paymentMethod,
     ).subscribe({
       next: (payment) => {
-        this.success = `Paiement simulé : ${payment.status === 'COMPLETED' ? 'réservation confirmée' : 'paiement refusé'}.`;
+        this.success = `Simulated payment: ${payment.status === 'COMPLETED' ? 'booking confirmed' : 'payment declined'}.`;
         this.workingId = null;
         this.refresh();
       },
@@ -211,7 +219,7 @@ export class MyReservationsPageComponent implements OnInit {
       operation = this.reservationService.refund(reservation.payment.id);
     }
     if (!operation) {
-      this.error = 'Aucun paiement remboursable n’est associé à cette réservation.';
+      this.error = 'No refundable payment is associated with this booking.';
       this.actionTarget = null;
       this.pendingAction = null;
       this.workingId = null;
@@ -220,8 +228,8 @@ export class MyReservationsPageComponent implements OnInit {
     operation.subscribe({
       next: () => {
         this.success = action === 'cancel'
-          ? 'La réservation a été annulée.'
-          : 'Le remboursement simulé a été enregistré et la réservation annulée.';
+          ? 'The booking has been cancelled.'
+          : 'The simulated refund has been recorded and the booking cancelled.';
         this.actionTarget = null;
         this.pendingAction = null;
         this.workingId = null;
@@ -251,36 +259,36 @@ export class MyReservationsPageComponent implements OnInit {
 
   statusLabel(status: ReservationStatus): string {
     return status === 'PENDING'
-      ? 'En attente'
+      ? 'Pending'
       : status === 'CONFIRMED'
-        ? 'Confirmée'
-        : 'Annulée';
+        ? 'Confirmed'
+        : 'Cancelled';
   }
 
   paymentLabel(reservation: Reservation): string {
     if (!reservation.payment) {
-      return 'Non réglé';
+      return 'Unpaid';
     }
     if (reservation.payment.status === 'COMPLETED') {
-      return 'Réglé (simulation)';
+      return 'Paid (simulated)';
     }
     if (reservation.payment.status === 'REFUNDED') {
-      return 'Remboursé (simulation)';
+      return 'Refunded (simulated)';
     }
     return reservation.payment.status === 'FAILED'
-      ? 'Échec (simulation)'
-      : 'En attente (simulation)';
+      ? 'Failed (simulated)'
+      : 'Pending (simulated)';
   }
 
   formatPrice(amount: string): string {
-    return new Intl.NumberFormat('fr-FR', {
+    return new Intl.NumberFormat('en-IE', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(Number(amount));
   }
 
   formatDate(value: string): string {
-    return new Intl.DateTimeFormat('fr-FR', {
+    return new Intl.DateTimeFormat('en-GB', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',

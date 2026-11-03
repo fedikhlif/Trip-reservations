@@ -40,6 +40,22 @@ class TripRepository:
             )
         )
 
+    def add_with_auto_id(self, trip: Trip) -> Trip:
+        """Insert a trip and let the database assign its ID."""
+        with self.database.session_scope() as session:
+            model = TripModel(
+                title=trip.title,
+                destination_id=trip.destination.id,
+                start_date=trip.start_date,
+                end_date=trip.end_date,
+                price=trip.price,
+                available_seats=trip.available_seats,
+            )
+            session.add(model)
+            session.flush()
+            trip.id = model.id
+        return trip
+
     def get_by_id(
         self,
         trip_id: int,

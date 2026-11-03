@@ -16,7 +16,7 @@ class DestinationRepository:
         self.database = database
 
     def add(self, destination: Destination, session: Session | None = None) -> None:
-        """Insert a destination."""
+        """Insert a destination with an explicit ID."""
         if session is None:
             with self.database.session_scope() as session:
                 self.add(destination, session)
@@ -27,8 +27,22 @@ class DestinationRepository:
                 name=destination.name,
                 country=destination.country,
                 description=destination.description,
+                image_url=destination.image_url or None,
             )
         )
+
+    def add_with_auto_id(self, destination: Destination) -> Destination:
+        """Insert a destination letting the database assign the ID, then return it."""
+        with self.database.session_scope() as session:
+            model = DestinationModel(
+                name=destination.name,
+                country=destination.country,
+                description=destination.description,
+                image_url=destination.image_url or None,
+            )
+            session.add(model)
+            session.flush()
+            return destination_to_domain(model)
 
     def get_by_id(
         self, destination_id: int, session: Session | None = None
@@ -51,7 +65,7 @@ class DestinationRepository:
             return [destination_to_domain(model) for model in models]
 
     def update(self, destination: Destination) -> None:
-        """Update an existing destination."""
+        """Update an existing destination including image_url."""
         with self.database.session_scope() as session:
             model = session.get(DestinationModel, destination.id)
             if model is None:
@@ -59,6 +73,8 @@ class DestinationRepository:
             model.name = destination.name
             model.country = destination.country
             model.description = destination.description
+            if destination.image_url:
+                model.image_url = destination.image_url
 
     def delete(self, destination_id: int) -> None:
         """Delete only destinations not referenced by trips."""

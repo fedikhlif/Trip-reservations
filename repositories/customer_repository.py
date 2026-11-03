@@ -3,6 +3,7 @@
 from typing import cast
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database import Database
@@ -30,6 +31,22 @@ class CustomerRepository:
         if not isinstance(admin, Admin):
             raise TypeError("add_admin expects an Admin.")
         self._insert_user(admin, UserRole.ADMIN)
+
+    def add_admin_with_auto_id(self, admin: Admin) -> Admin:
+        """Insert an administrator and let the database assign its ID."""
+        if not isinstance(admin, Admin):
+            raise TypeError("add_admin_with_auto_id expects an Admin.")
+        with self.database.session_scope() as session:
+            model = UserModel(
+                name=admin.name,
+                email=admin.email,
+                password_hash=admin.password_hash,
+                role=UserRole.ADMIN,
+            )
+            session.add(model)
+            session.flush()
+            admin.id = model.id
+        return admin
 
     def _insert_user(self, user: User, role: UserRole) -> None:
         with self.database.session_scope() as session:
@@ -95,6 +112,43 @@ class CustomerRepository:
             if model is None or model.role is not UserRole.CUSTOMER:
                 raise KeyError(f"Customer {customer_id} was not found.")
             session.delete(model)
+
+    def add_with_auto_id(self, customer: "Customer") -> None:
+        """Insert a customer, letting the database assign the primary key."""
+        if not isinstance(customer, Customer):
+            raise TypeError("CustomerRepository.add_with_auto_id expects a Customer.")
+        try:
+            with self.database.session_scope() as session:
+                model = UserModel(
+                    name=customer.name,
+                    email=customer.email,
+                    password_hash=customer.password_hash,
+                    role=UserRole.CUSTOMER,
+                )
+                session.add(model)
+        except IntegrityError as exc:
+            raise ValueError("This email address is already in use.") from exc
+
+    def get_by_email(self, email: str) -> "Customer":
+        """Return a customer by email address; raises KeyError if not found."""
+        try:
+            user = self.get_user_by_email(email)
+        except KeyError as error:
+            raise KeyError(f"Customer with email {email!r} was not found.") from error
+        if not isinstance(user, Customer):
+            raise KeyError(f"Customer with email {email!r} was not found.")
+        return user
+
+    def get_user_by_email(self, email: str) -> User:
+        """Return either user subtype by email address."""
+        with self.database.session_scope() as session:
+            model = session.scalars(
+                select(UserModel)
+                .where(UserModel.email == email.lower())
+            ).first()
+        if model is None:
+            raise KeyError(f"User with email {email!r} was not found.")
+        return user_to_domain(model)
 
     def transaction(self):
         """Expose a database session transaction for coordinated workflows."""

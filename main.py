@@ -2,7 +2,9 @@
 
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
+import os
 
+from argon2 import PasswordHasher
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import Database, upgrade_schema
@@ -19,6 +21,12 @@ from repositories.trip_repository import TripRepository
 from services.payment_service import PaymentService
 from services.reservation_service import ReservationService
 from services.trip_service import TripService
+
+_ph = PasswordHasher()
+
+# Development seed credentials (can be overridden via environment variables)
+_DEMO_CUSTOMER_PASSWORD = os.getenv("DEMO_CUSTOMER_PASSWORD", "demo-customer-pass")
+_DEMO_ADMIN_PASSWORD = os.getenv("DEMO_ADMIN_PASSWORD", "demo-admin-pass")
 
 
 def build_application(
@@ -42,18 +50,34 @@ def build_application(
     )
     payment_repository = PaymentRepository(database, reservation_repository)
 
-    customer = Customer(1, "Jordan Lee", "jordan@example.com", "demo-hash-customer")
-    admin = Admin(2, "Morgan Admin", "admin@example.com", "demo-hash-admin")
+    # Seed demo accounts with real Argon2 hashes so they can be used via the API.
+    demo_customer_hash = _ph.hash(_DEMO_CUSTOMER_PASSWORD)
+    demo_admin_hash = _ph.hash(_DEMO_ADMIN_PASSWORD)
+
+    customer = Customer(1, "Jordan Lee", "jordan@example.com", demo_customer_hash)
+    admin = Admin(2, "Morgan Admin", "admin@example.com", demo_admin_hash)
+
     try:
         customer = customer_repository.get_by_id(customer.id)
     except KeyError:
         customer_repository.add(customer)
+    else:
+        # If stored hash is not a real Argon2 hash, upgrade it now.
+        if not customer.password_hash.startswith("$argon2"):
+            customer.password_hash = demo_customer_hash
+            customer_repository.update(customer)
+
     try:
         customer_repository.get_user_by_id(admin.id)
     except KeyError:
         customer_repository.add_admin(admin)
     else:
         admin = Admin(admin.id, admin.name, admin.email, admin.password_hash)
+        # Upgrade admin hash if it is not a real Argon2 hash.
+        if not admin.password_hash.startswith("$argon2"):
+            admin.password_hash = demo_admin_hash
+            customer_repository.update(admin)
+
 
     destinations = [
         Destination(

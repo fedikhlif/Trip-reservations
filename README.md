@@ -145,6 +145,16 @@ npm start
 
 Open `http://localhost:4200`. Angular proxies `/api` to `http://127.0.0.1:8082`; the backend's configurable `CORS_ORIGINS` setting allows the local Angular origin for direct API access. The production Angular environment also uses the relative `/api` path, so production hosting must route that path to Flask and set `CORS_ORIGINS` to the exact trusted origins if cross-origin requests are used.
 
+### Administrator trip management
+
+Create an administrator from the project root using the interactive, password-hidden prompt. Running the command again for the same administrator email resets that admin's password:
+
+```powershell
+python create_admin.py
+```
+
+The command applies migrations, ensures the initial application records exist, and creates a separate administrator account. Administrator accounts are not created through public registration. Sign in through the usual **Log in** page; administrators are redirected to `/admin/trips`, where they can create, edit, and delete trips. The API enforces the administrator role on every management request. Trips with reservation history cannot be deleted.
+
 ### API used by TOUR
 
 | Method and path | Purpose |
@@ -154,9 +164,13 @@ Open `http://localhost:4200`. Angular proxies `/api` to `http://127.0.0.1:8082`;
 | `GET /api/trips` | List available trips; supports the legacy `destination`, `date`, and `max_price` filters. |
 | `GET /api/trips/search` | Search with `destination_id`, `departure_date`, `return_date`, `travelers`, and `max_price`. Trips must fit in the requested date window and have enough seats. |
 | `GET /api/trips/{trip_id}` | Retrieve a trip and its current availability. |
-| `GET /api/reservations` | List reservations for the seeded demo customer. |
+| `GET /api/admin/trips` | List all trips (administrator session required). |
+| `POST /api/admin/trips` | Create a trip (administrator session required). |
+| `PUT /api/admin/trips/{trip_id}` | Update a trip (administrator session required). |
+| `DELETE /api/admin/trips/{trip_id}` | Delete a trip without reservation history (administrator session required). |
+| `GET /api/reservations` | List reservations for the signed-in customer. |
 | `POST /api/reservations` | Create a booking with `{"trip_id": 1, "travelers": 2}`. Returns the reservation, total price, current status, and traveler count. |
-| `POST /api/reservations/{reservation_id}/cancel` | Cancel an eligible demo-customer reservation and restore its seats. |
+| `POST /api/reservations/{reservation_id}/cancel` | Cancel an eligible reservation owned by the signed-in customer and restore its seats. |
 | `POST /api/reservations/{reservation_id}/payments` | Record a simulated payment with `{"amount": "2598.00", "method": "CREDIT_CARD", "succeed": true}`. |
 | `POST /api/payments/{payment_id}/refund` | Simulate a refund and cancel the associated confirmed reservation. |
 | `GET /api/openapi.json` | OpenAPI contract; Swagger UI is at `/api/docs/`. |
@@ -165,8 +179,8 @@ Successful reservation creation returns HTTP `201`; invalid input returns `400`,
 
 ### Current limitations
 
-- The existing backend has no authentication or registered customer flow. The API and reservation screen use the seeded “Jordan Lee” demo customer; they must not be exposed as a production customer-account system.
-- There are no authenticated admin API routes. Administrative actions are therefore not exposed in TOUR.
+- Customer accounts use session authentication. Reservations are scoped to signed-in customers; the legacy demo reservation behavior should not be exposed as a production customer-account system.
+- Administrator accounts must be provisioned locally with `python create_admin.py`; do not expose admin account creation publicly.
 - Payments and refunds only update local application state. No real payment provider is integrated.
 - The existing contact form has no backend or mail-delivery integration; TOUR now reports that it cannot send the message instead of showing a false success.
 - MySQL startup, migrations, and the optional legacy SQLite import still require the operator's configured MySQL server and credentials. The automated tests use isolated SQLite databases.
@@ -181,4 +195,4 @@ Set-Location .\tour-frontend
 npm run build
 ```
 
-For an end-to-end local check, open the home page, select the dates of a trip returned by `/api/trips`, choose a traveler count within its availability, create the reservation, then visit **Mes réservations** to simulate payment or cancel it. A completed simulated payment can be refunded there; no external charge is made.
+For an end-to-end local check, sign in as an administrator and use **Manage trips** to create or edit a trip. Customer users can book an available trip and view it under **My bookings**. Payments and refunds remain simulated; no external charge is made.

@@ -17,14 +17,14 @@ import { PageHeaderComponent } from '../../../../shared/components/site-parts/si
     <main class="listing-page">
       <div class="content-shell">
         <div class="listing-intro">
-          <div><p>Le monde vous attend</p><h2>Trouvez votre prochaine destination</h2></div>
+          <div><p>The world is waiting</p><h2>Find your next destination</h2></div>
           <label class="search-field">
-            <span class="sr-only">Rechercher une destination</span>
-            <input [(ngModel)]="query" placeholder="Rechercher une destination…" />
+            <span class="sr-only">Search destinations</span>
+            <input [(ngModel)]="query" placeholder="Search destinations…" />
           </label>
         </div>
 
-        <p *ngIf="loading" role="status">Chargement des destinations…</p>
+        <p *ngIf="loading" role="status">Loading destinations…</p>
         <p *ngIf="error" class="api-error" role="alert">{{ error }}</p>
         <ng-container *ngIf="!loading && !error">
           <div *ngIf="visible.length; else empty" class="cards-grid">
@@ -36,8 +36,8 @@ import { PageHeaderComponent } from '../../../../shared/components/site-parts/si
           </div>
           <ng-template #empty>
             <div class="empty-state">
-              <h3>Aucune destination trouvée</h3>
-              <p>{{ destinations.length ? 'Essayez un autre mot-clé.' : 'Aucune destination n’est encore disponible.' }}</p>
+              <h3>No destinations found</h3>
+              <p>{{ destinations.length ? 'Try another keyword.' : 'No destinations are available yet.' }}</p>
             </div>
           </ng-template>
         </ng-container>

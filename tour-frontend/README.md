@@ -1,6 +1,6 @@
 # TOUR Frontend
 
-The Angular 17 app preserves the existing French TOUR interface and loads destination, trip, and reservation data from the Flask backend. The development server proxies `/api` to `http://127.0.0.1:8082` using `proxy.conf.json`.
+The Angular 17 app provides the TOUR interface in English and loads destination, trip, and reservation data from the Flask backend. The development server proxies `/api` to `http://127.0.0.1:8082` using `proxy.conf.json`.
 
 ## Run locally
 
@@ -26,7 +26,7 @@ Open `http://localhost:4200`. For MySQL setup and the `.env` example, see the pr
 
 The app uses the relative `/api` base URL configured in `src/environments/environment.ts`. `DestinationService`, `TripService`, and `ReservationService` call the backend's `/api/destinations`, `/api/trips`, `/api/trips/search`, and `/api/reservations` endpoints. The home form sends destination ID, departure/return date, and traveler count to the API; booking reserves the requested number of seats and displays the server's pending reservation.
 
-The backend currently has no authentication, so reservations are the seeded demo customer's data, not a signed-in user's private account. Payment and refund buttons are explicitly simulated. There is no currency in the backend schema, so the UI shows amounts without a currency label.
+Customers can register and sign in; reservations are scoped to the signed-in customer. Administrators provisioned with `python create_admin.py` can manage trips at `/admin/trips`. Payment and refund buttons are explicitly simulated. There is no currency in the backend schema.
 
 The contact form is not submitted because the backend has no contact endpoint or mail provider.
 
