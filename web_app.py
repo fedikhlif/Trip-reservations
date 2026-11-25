@@ -26,6 +26,7 @@ def create_app(database: Database | None = None) -> Flask:
     load_dotenv()
     app = Flask(__name__)
 
+
     # ── Session & security configuration ────────────────────────────────────
     secret = os.getenv("FLASK_SECRET_KEY", "local-development-key-change-in-production")
     if secret == "local-development-key-change-in-production":
@@ -95,6 +96,12 @@ def create_app(database: Database | None = None) -> Flask:
                 response.headers.add("Vary", "Origin")
             return response
         return None
+
+    @app.after_request
+    def add_security_headers(response):
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
 
     @app.after_request
     def add_api_cors_headers(response):
@@ -217,6 +224,9 @@ def _safe_error(error: Exception) -> str:
 
 
 if __name__ == "__main__":
+    from werkzeug.serving import WSGIRequestHandler
+    WSGIRequestHandler.server_version = "TOUR-API"
+    WSGIRequestHandler.sys_version = ""
     web_app = create_app()
     try:
         web_app.run(host="127.0.0.1", port=8082, debug=True)

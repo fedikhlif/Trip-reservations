@@ -9,18 +9,18 @@ from sqlalchemy.pool import NullPool
 from database import Database, database_url_from_environment
 from models import Base
 
-config = context.config
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+alembic_config = context.config
+if alembic_config.config_file_name is not None:
+    fileConfig(alembic_config.config_file_name)
 
 target_metadata = Base.metadata
-shared_connection = config.attributes.get("connection")
+shared_connection = alembic_config.attributes.get("connection")
 database_url = (
     shared_connection.engine.url
     if shared_connection is not None
     else database_url_from_environment()
 )
-config.set_main_option(
+alembic_config.set_main_option(
     "sqlalchemy.url",
     database_url.render_as_string(hide_password=False).replace("%", "%%"),
 )
